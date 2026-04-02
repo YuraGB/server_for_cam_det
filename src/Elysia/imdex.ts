@@ -1,39 +1,61 @@
-/**
- * This module sets up a WebSocket server using the Elysia framework. 
- * It allows clients to connect and receive real-time updates (frames) from the server.
- * The clients are stored in a Set, and the broadcastFrame function iterates over them to send data.
- * The WebSocket server listens for connections on the '/ws' endpoint, 
- * and handles open, message, and close events to manage client connections.
- */
+import Elysia from "elysia";
+import { addClient, removeClient } from "../utils/broadcstFrame";
+import type { Serve } from "bun";
+import { SERVER_PORT } from "../constants";
 
-import Elysia from "elysia"
-import { addClient, removeClient } from "../utils/broadcstFrame"
-import { WS_DETECTION_ENDPOINT, WS_ENDPOINT, WS_LIVE_ENDPOINT } from "../constants"
+type WSData = { streamType: "liveStream" | "detectionStream" };
 
-const app = new Elysia({name: 'CameraCVServer'})
+// --- 1. ELYSIA APP (тільки HTTP) ---
+const app = new Elysia({ name: "CameraCVServer" });
 
-// WS для live відео
-app.ws(WS_LIVE_ENDPOINT, {
-  open: (ws) => {
-    console.log('[WS] Клієнт підключився до liveStream')
-    addClient("liveStream", ws)
+
+app.get("/", () => "OK");
+
+// Elysia can handle other HTTP routes if needed, but for now we will use it mainly for WebSocket upgrades and serving static files if necessary.
+const elysiaHandler = app.fetch;
+
+// --- 2. WS + gRPC INTEGRATION ---
+// The WebSocket server will be handled by Bun's native WebSocket support, while Elysia will manage the HTTP routes and upgrades.
+// This allows us to have a lightweight WebSocket server that can efficiently broadcast frames to clients, while still leveraging Elysia for any additional HTTP functionality we might want to add in the future.
+export default {
+  port: SERVER_PORT,
+
+  fetch(req, server) {
+    const url = new URL(req.url);
+
+    // 👉 WS endpoint
+    if (url.pathname === "/ws") {
+      const streamType = url.searchParams.get("type"); // liveStream | detectionStream
+
+      const success = server.upgrade(req, {
+          data  : { streamType: streamType as "liveStream" | "detectionStream" }
+      });
+
+      if (success) return;
+      return new Response("WS upgrade failed", { status: 400 });
+    }
+
+    // 👉 всі інші запити → Elysia
+    return elysiaHandler(req);
   },
-  close: (ws) => {
-    console.log('[WS] Клієнт відключився від liveStream')
-    removeClient("liveStream", ws)
-  }
-})
 
-// WS для детекцій YOLO
-app.ws(WS_DETECTION_ENDPOINT, {
-  open: (ws) => {
-    console.log('[WS] Клієнт підключився до detectionStream')
-    addClient("detectionStream", ws)
-  },
-  close: (ws) => {
-    console.log('[WS] Клієнт відключився від detectionStream')
-    removeClient("detectionStream", ws)
-  }
-})
+  websocket: {
+    open(ws: Bun.ServerWebSocket<WSData>) {
+      const { streamType } = ws.data;
+      console.log("[WS] open:", streamType);
 
-export default app
+      addClient(streamType, ws);
+    },
+
+    message(ws: Bun.ServerWebSocket<WSData>, message: string | Buffer) {
+      // Handle incoming messages if needed
+    },
+
+    close(ws: Bun.ServerWebSocket<WSData>) {
+      const { streamType } = ws.data;
+      console.log("[WS] close:", streamType);
+
+      removeClient(streamType, ws);
+    },
+  } as Bun.WebSocketHandler<WSData>,
+} satisfies Serve.Options<WSData>;

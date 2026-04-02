@@ -1,21 +1,25 @@
 /**
- * "app" can be changed to Fastly (exaьple) 
- * if we want to switch to nodejs against Elysia,
+ * "app" can be changed to Fastly (example) 
+ * if we want to switch to nodejs against bunjs,
  *  but for now we will use Elysia 
- * as it is more modern and faster than nodejs
 **/
-import { SERVER_PORT } from "./constants"
-import app from "./Elysia/imdex" 
+import options from "./Elysia/imdex" 
 import { startGRPCStream } from "./grpc"
 
 // ------------------------------
-// Запуск сервера
+// Start the WebSocket server and then start the gRPC stream
 // ------------------------------
-app.listen(SERVER_PORT, () => {
-  console.log(`[WS] Сервер запущено на порту ${SERVER_PORT}`)
+// The WebSocket server listens for client connections and manages them,
+// while the gRPC stream continuously receives frames and broadcasts them to connected clients.
+// ------------------------------
+// app.listen(SERVER_PORT, () => {
+//   console.log(`[WS] Сервер запущено на порту ${SERVER_PORT}`)
+
+Bun.serve(options)
   
   // ------------------------------
-  // Після запуску WS стартуємо gRPC стрім
+  // Start the gRPC stream after the WebSocket server is up and running
+  // ------------------------------
+  // This ensures that we can immediately broadcast frames to any clients that connect right after the server starts.
   // ------------------------------
  startGRPCStream()
-})

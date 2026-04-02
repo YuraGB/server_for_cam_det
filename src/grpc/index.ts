@@ -1,85 +1,94 @@
 import * as grpc from '@grpc/grpc-js'
 import * as protoLoader from '@grpc/proto-loader'
 import { broadcastFrame } from '../utils/broadcstFrame'
-import {GRPC_SERVER_ADDRESS, PROTO_PATH, TIMEOUT_RECONNECT_MS} from '../constants'
+import { GRPC_SERVER_ADDRESS, PROTO_PATH, TIMEOUT_RECONNECT_MS } from '../constants'
 
-// ------------------------------
-// Налаштування gRPC
-// ------------------------------
+const packageDefinition = protoLoader.loadSync(PROTO_PATH, {})
+const detectionProto = grpc.loadPackageDefinition(packageDefinition) as any
+const DetectionService = detectionProto.detection.DetectionService
 
 export type StreamTypes = "liveStream" | "detectionStream"
 
-const streams:Record<StreamTypes, grpc.ClientReadableStream<any> | null> = {
+interface FrameData {
+  image?: Buffer
+  image_base64?: string
+  [key: string]: any
+}
+
+type StreamState = {
+  [key in StreamTypes]: grpc.ClientReadableStream<FrameData> | null
+}
+
+type ReconnectingState = {
+  [key in StreamTypes]: boolean
+}
+
+const streams: StreamState = {
   liveStream: null,
   detectionStream: null
 }
 
-// Завантаження proto
-const packageDef = protoLoader.loadSync(PROTO_PATH, {
-  keepCase: true,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true,
-})
-
-const proto = grpc.loadPackageDefinition(packageDef) as any
-const DetectionService = proto.detection.DetectionService
-
-// ------------------------------
-// gRPC клієнт
-// ------------------------------
-const grpcClient = new DetectionService(
-  GRPC_SERVER_ADDRESS,
-  grpc.credentials.createInsecure()
-)
-
-// Підписка на стрім з C++ сервера
-function startGRPCStream(): void {
-  startStream("liveStream")
-  startStream("detectionStream")
+// Track if we are already trying to reconnect a specific stream
+const reconnecting: ReconnectingState = {
+  liveStream: false,
+  detectionStream: false
 }
 
+// ... (proto loading remains the same) ...
+
+const grpcClient = new DetectionService(
+  GRPC_SERVER_ADDRESS,
+  grpc.credentials.createInsecure(),
+  {
+    'grpc.max_receive_message_length': 100 * 1024 * 1024, // 100MB for video frames
+  }
+)
+
 function startStream(streamType: StreamTypes) {
-  // Закриваємо старий стрім
+  // Clear any existing stream
   if (streams[streamType]) {
-    console.log(`[gRPC] Закриваємо старий стрім ${streamType}`)
-    streams[streamType]?.cancel()
+    // Remove listeners before cancelling to prevent the "reconnect loop"
+    streams[streamType]!.removeAllListeners()
+    streams[streamType]!.cancel()
     streams[streamType] = null
   }
 
-  // Створюємо новий стрім
-  let call: grpc.ClientReadableStream<any>
-  if (streamType === "liveStream") {
-    call = grpcClient.StreamLiveFrames({})
-  } else {
-    call = grpcClient.StreamDetectionFrames({})
-  }
+  reconnecting[streamType] = false
+
+  const call = streamType === "liveStream" 
+    ? grpcClient.StreamLiveFrames({}) 
+    : grpcClient.StreamDetectionFrames({})
 
   streams[streamType] = call
 
-  call.on('data', (frame: any) => {
-    try {
-      if (frame.image) {
-        frame.image_base64 = Buffer.from(frame.image).toString('base64')
-        delete frame.image
-      }
-      broadcastFrame(frame, streamType)
-    } catch (err) {
-      console.error(`[gRPC] Помилка обробки кадру (${streamType}):`, err)
-    }
+  call.on('data', (frame: FrameData) => {
+    broadcastFrame(frame, streamType)
   })
 
-  call.on('end', () => scheduleReconnect(streamType))
-  call.on('error', (err) => {
-    console.error(`[gRPC] Помилка стріму ${streamType}:`, err.message)
-    scheduleReconnect(streamType)
+  const handleExit = (reason: string): void => {
+    if (reconnecting[streamType]) return
+    reconnecting[streamType] = true
+    
+    console.warn(`[gRPC] Stream ${streamType} exited (${reason}). Reconnecting...`)
+    
+    // Cleanup
+    call.destroy()
+    streams[streamType] = null
+
+    setTimeout(() => startStream(streamType), TIMEOUT_RECONNECT_MS)
+  }
+
+  call.on('end', () => handleExit('ended'))
+  call.on('error', (err: grpc.ServiceError) => {
+    // Ignore internal cancellation errors triggered by us
+    if (err.code === grpc.status.CANCELLED) return
+    handleExit(`error: ${err.message}`)
   })
 }
 
-function scheduleReconnect(streamType: StreamTypes) {
-  console.log(`[gRPC] Стрім ${streamType} завершено, перепідключення через ${TIMEOUT_RECONNECT_MS}ms...`)
-  setTimeout(() => startStream(streamType), TIMEOUT_RECONNECT_MS)
+function startGRPCStream() {
+  startStream("liveStream")
+  startStream("detectionStream")
 }
 
 export { startGRPCStream }

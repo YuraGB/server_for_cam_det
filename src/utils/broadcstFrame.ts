@@ -6,37 +6,53 @@
 
 import type { StreamTypes } from "../grpc";
 
-// import type { InputSchema, MergeSchema, StandaloneInputSchema, UnwrapRoute } from "elysia";
-// import type { ElysiaWS } from "elysia/ws";
-// import type { ServerWebSocket } from "elysia/ws/bun";
+import type { MergeSchema, StandaloneInputSchema, UnwrapRoute } from "elysia";
+import type { ElysiaWS } from "elysia/ws";
+import type { ServerWebSocket } from "elysia/ws/bun";
 
-// type WS = ElysiaWS<
-//   ServerWebSocket<{}>,
-//   MergeSchema<UnwrapRoute<StandaloneInputSchema<never>, {}>, {}>
-// >;
+type WS = ElysiaWS<
+  ServerWebSocket<{}>,
+  MergeSchema<UnwrapRoute<StandaloneInputSchema<never>, {}>, {}>
+>;
 
-const clients = new Map<StreamTypes, Set<WebSocket>>()
 
-// Відправка кадру всім клієнтам
+const clients = new Map<StreamTypes, Set<WS>>()
+
+// Send frame data to all clients connected to the specified stream type
 function broadcastFrame(frame: any, streamType: StreamTypes): void {
- let data = frame;
-
-  try {
-    // If frame wasn't serialized, we can convert it to string or handle it as needed
-    if(typeof frame === 'object' && frame !== null) {
-      data = JSON.stringify(frame)
-    } 
+  try {  
     for (const ws of clients.get(streamType) || []) {
         if (ws.readyState === 1) {
-          ws.send(data)
+
+          // Optimize by sending metadata and image as a single binary packet
+          const meta = {
+            frameId: frame.frameId,
+            timestamp: frame.timestamp.toNumber(),
+            cameraId: frame.cameraId,
+            detections: frame.detections,
+          };
+
+          const metaBuf = Buffer.from(JSON.stringify(meta));
+
+          const header = Buffer.alloc(4);
+          header.writeUInt32BE(metaBuf.length);
+
+          const packet = Buffer.concat([
+            header,
+            metaBuf,
+            frame.image 
+          ]);
+
+          ws.send(new Uint8Array(packet)); // Convert Buffer to Uint8Array for WebSocket        
         }
     }
     
   } catch (err) {
-    console.error('[WS] Помилка при відправці кадру:', err)
+    console.error('[WS] Error during frame sending:', err)
   }
 }
 
+// Add a new WebSocket client to the appropriate stream type set
 function addClient(streamType: StreamTypes, ws: any) {
   if (!clients.has(streamType)) {
     clients.set(streamType, new Set())
@@ -44,7 +60,7 @@ function addClient(streamType: StreamTypes, ws: any) {
   clients.get(streamType)!.add(ws)
 }
 
-
+// Remove a WebSocket client from the appropriate stream type set
 function removeClient(streamType: StreamTypes, ws: any) {
   clients.get(streamType)?.delete(ws)
 }
