@@ -13,8 +13,8 @@ import path from 'path';
  const MAX_FRAME_SIZE = 10 * 1024 * 1024 // 10 MB
 
 export {
-  PROTO_PATH,
-  SERVER_PORT,
+    PROTO_PATH,
+    SERVER_PORT,
     GRPC_SERVER_ADDRESS,
     WS_ENDPOINT,
     WS_LIVE_ENDPOINT,
@@ -23,4 +23,4 @@ export {
     APP_NAME,
     LOG_LEVEL,
     MAX_FRAME_SIZE
-}
+    }
