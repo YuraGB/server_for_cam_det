@@ -1,9 +1,21 @@
 import * as grpc from '@grpc/grpc-js'
 import * as protoLoader from '@grpc/proto-loader'
+import fs from "fs"
 import { broadcastFrame } from '../utils/broadcstFrame'
 import { GRPC_SERVER_ADDRESS, PROTO_PATH, TIMEOUT_RECONNECT_MS } from '../constants'
 
-const packageDefinition = protoLoader.loadSync(PROTO_PATH, {})
+if (!fs.existsSync(PROTO_PATH)) {
+  throw new Error(
+    `[Config] detection proto not found at PROTO_PATH="${PROTO_PATH}". ` +
+    `Set PROTO_PATH env var or create models/detection.proto.`
+  )
+}
+
+const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+  keepCase: true,
+  longs: String,
+  defaults: true,
+})
 const detectionProto = grpc.loadPackageDefinition(packageDefinition) as any
 const DetectionService = detectionProto.detection.DetectionService
 
@@ -23,6 +35,10 @@ type ReconnectingState = {
   [key in StreamTypes]: boolean
 }
 
+type ReconnectTimers = {
+  [key in StreamTypes]: ReturnType<typeof setTimeout> | null
+}
+
 const streams: StreamState = {
   liveStream: null,
   detectionStream: null
@@ -34,7 +50,10 @@ const reconnecting: ReconnectingState = {
   detectionStream: false
 }
 
-// ... (proto loading remains the same) ...
+const reconnectTimers: ReconnectTimers = {
+  liveStream: null,
+  detectionStream: null
+}
 
 const grpcClient = new DetectionService(
   GRPC_SERVER_ADDRESS,
@@ -44,7 +63,24 @@ const grpcClient = new DetectionService(
   }
 )
 
+function clearReconnectTimer(streamType: StreamTypes): void {
+  const timer = reconnectTimers[streamType]
+  if (!timer) return
+  clearTimeout(timer)
+  reconnectTimers[streamType] = null
+}
+
+function scheduleReconnect(streamType: StreamTypes): void {
+  clearReconnectTimer(streamType)
+  reconnectTimers[streamType] = setTimeout(() => {
+    reconnectTimers[streamType] = null
+    startStream(streamType)
+  }, TIMEOUT_RECONNECT_MS)
+}
+
 function startStream(streamType: StreamTypes) {
+  clearReconnectTimer(streamType)
+
   // Clear any existing stream
   if (streams[streamType]) {
     // Remove listeners before cancelling to prevent the "reconnect loop"
@@ -72,10 +108,13 @@ function startStream(streamType: StreamTypes) {
     console.warn(`[gRPC] Stream ${streamType} exited (${reason}). Reconnecting...`)
     
     // Cleanup
-    call.destroy()
-    streams[streamType] = null
+    call.removeAllListeners()
+    call.cancel()
+    if (streams[streamType] === call) {
+      streams[streamType] = null
+    }
 
-    setTimeout(() => startStream(streamType), TIMEOUT_RECONNECT_MS)
+    scheduleReconnect(streamType)
   }
 
   call.on('end', () => handleExit('ended'))
@@ -91,4 +130,18 @@ function startGRPCStream() {
   startStream("detectionStream")
 }
 
-export { startGRPCStream }
+function stopGRPCStream(): void {
+  for (const streamType of ["liveStream", "detectionStream"] as const) {
+    clearReconnectTimer(streamType)
+    reconnecting[streamType] = false
+
+    const stream = streams[streamType]
+    if (!stream) continue
+
+    stream.removeAllListeners()
+    stream.cancel()
+    streams[streamType] = null
+  }
+}
+
+export { startGRPCStream, stopGRPCStream }

@@ -1,68 +1,84 @@
-/**
- * This module manages WebSocket clients and provides a function to broadcast frames to all connected clients.
- * It is used by the gRPC stream to send detection frames to WebSocket clients in real-time.
- * The clients are stored in a Set, and the broadcastFrame function iterates over them to send data.
- */
-
 import type { StreamTypes } from "../grpc";
+type FrameData = {
+  frameId?: number | string;
+  timestamp?: number | { toNumber?: () => number };
+  cameraId?: number | string;
+  detections?: unknown;
+  image?: Buffer | Uint8Array | ArrayBuffer;
+};
 
-import type { MergeSchema, StandaloneInputSchema, UnwrapRoute } from "elysia";
-import type { ElysiaWS } from "elysia/ws";
-import type { ServerWebSocket } from "elysia/ws/bun";
+type WSLike = {
+  readyState: number;
+  bufferedAmount?: number;
+  send: (data: string | Uint8Array) => void;
+};
 
-type WS = ElysiaWS<
-  ServerWebSocket<{}>,
-  MergeSchema<UnwrapRoute<StandaloneInputSchema<never>, {}>, {}>
->;
+const MAX_WS_BUFFER_BYTES = 8 * 1024 * 1024;
+const clients = new Map<StreamTypes, Set<WSLike>>();
 
+function normalizeTimestamp(value: FrameData["timestamp"]): number {
+  if (typeof value === "number") return value;
+  if (value && typeof value.toNumber === "function") return value.toNumber();
+  return Date.now();
+}
 
-const clients = new Map<StreamTypes, Set<WS>>()
+function normalizeImageBytes(image: FrameData["image"]): Buffer | null {
+  if (!image) return null;
+  if (Buffer.isBuffer(image)) return image;
+  if (image instanceof Uint8Array) return Buffer.from(image);
+  if (image instanceof ArrayBuffer) return Buffer.from(image);
+  return null;
+}
 
-// Send frame data to all clients connected to the specified stream type
-function broadcastFrame(frame: any, streamType: StreamTypes): void {
-  try {  
-    for (const ws of clients.get(streamType) || []) {
-        if (ws.readyState === 1) {
+function broadcastFrame(frame: FrameData, streamType: StreamTypes): void {
+  const streamClients = clients.get(streamType);
+  if (!streamClients || streamClients.size === 0) return;
 
-          // Optimize by sending metadata and image as a single binary packet
-          const meta = {
-            frameId: frame.frameId,
-            timestamp: frame.timestamp.toNumber(),
-            cameraId: frame.cameraId,
-            detections: frame.detections,
-          };
+  const imageBytes = normalizeImageBytes(frame.image);
+  if (!imageBytes) return;
 
-          const metaBuf = Buffer.from(JSON.stringify(meta));
+  const meta = {
+    frameId: frame.frameId,
+    timestamp: normalizeTimestamp(frame.timestamp),
+    cameraId: frame.cameraId,
+    detections: frame.detections ?? [],
+  };
 
-          const header = Buffer.alloc(4);
-          header.writeUInt32BE(metaBuf.length);
+  const metaBuf = Buffer.from(JSON.stringify(meta));
+  const header = Buffer.allocUnsafe(4);
+  header.writeUInt32BE(metaBuf.length);
+  const packet = Buffer.concat([header, metaBuf, imageBytes]);
+  const payload = new Uint8Array(packet);
 
-          const packet = Buffer.concat([
-            header,
-            metaBuf,
-            frame.image 
-          ]);
-
-          ws.send(new Uint8Array(packet)); // Convert Buffer to Uint8Array for WebSocket        
-        }
+  for (const ws of streamClients) {
+    if (ws.readyState !== 1) {
+      streamClients.delete(ws);
+      continue;
     }
-    
-  } catch (err) {
-    console.error('[WS] Error during frame sending:', err)
+
+    if ((ws.bufferedAmount ?? 0) > MAX_WS_BUFFER_BYTES) {
+      continue;
+    }
+
+    try {
+      ws.send(payload);
+    } catch {
+      streamClients.delete(ws);
+    }
   }
 }
 
-// Add a new WebSocket client to the appropriate stream type set
-function addClient(streamType: StreamTypes, ws: any) {
-  if (!clients.has(streamType)) {
-    clients.set(streamType, new Set())
-  }
-  clients.get(streamType)!.add(ws)
+function addClient(streamType: StreamTypes, ws: WSLike): void {
+  if (!clients.has(streamType)) clients.set(streamType, new Set());
+  clients.get(streamType)!.add(ws);
 }
 
-// Remove a WebSocket client from the appropriate stream type set
-function removeClient(streamType: StreamTypes, ws: any) {
-  clients.get(streamType)?.delete(ws)
+function removeClient(streamType: StreamTypes, ws: WSLike): void {
+  const streamClients = clients.get(streamType);
+  if (!streamClients) return;
+
+  streamClients.delete(ws);
+  if (streamClients.size === 0) clients.delete(streamType);
 }
 
-export { broadcastFrame, clients, addClient, removeClient }
+export { broadcastFrame, clients, addClient, removeClient };

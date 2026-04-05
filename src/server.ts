@@ -1,25 +1,17 @@
-/**
- * "app" can be changed to Fastly (example) 
- * if we want to switch to nodejs against bunjs,
- *  but for now we will use Elysia 
-**/
-import options from "./Elysia/imdex" 
-import { startGRPCStream } from "./grpc"
+import options from "./Elysia/imdex";
+import { startGRPCStream, stopGRPCStream } from "./grpc";
+import { APP_NAME } from "./constants";
 
-// ------------------------------
-// Start the WebSocket server and then start the gRPC stream
-// ------------------------------
-// The WebSocket server listens for client connections and manages them,
-// while the gRPC stream continuously receives frames and broadcasts them to connected clients.
-// ------------------------------
-// app.listen(SERVER_PORT, () => {
-//   console.log(`[WS] Сервер запущено на порту ${SERVER_PORT}`)
+const server = Bun.serve(options);
+startGRPCStream();
 
-Bun.serve(options)
-  
-  // ------------------------------
-  // Start the gRPC stream after the WebSocket server is up and running
-  // ------------------------------
-  // This ensures that we can immediately broadcast frames to any clients that connect right after the server starts.
-  // ------------------------------
- startGRPCStream()
+console.log(`[${APP_NAME}] running on ${server.url}`);
+
+function shutdown(signal: string): void {
+  console.log(`[${APP_NAME}] received ${signal}, shutting down...`);
+  stopGRPCStream();
+  server.stop(true);
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
