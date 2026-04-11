@@ -1,8 +1,8 @@
 import type { StreamTypes } from "../grpc";
 type FrameData = {
-  frameId?: number | string;
-  timestamp?: number | { toNumber?: () => number };
-  cameraId?: number | string;
+  frame_id?: number | string;
+  timestamp?: number | string | { toNumber?: () => number };
+  camera_id?: number | string;
   detections?: unknown;
   image?: Buffer | Uint8Array | ArrayBuffer;
 };
@@ -18,16 +18,37 @@ const clients = new Map<StreamTypes, Set<WSLike>>();
 
 function normalizeTimestamp(value: FrameData["timestamp"]): number {
   if (typeof value === "number") return value;
-  if (value && typeof value.toNumber === "function") return value.toNumber();
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  if (value && typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+    return value.toNumber();
+  }
   return Date.now();
 }
 
-function normalizeImageBytes(image: FrameData["image"]): Buffer | null {
+function normalizeImageBytes(image: FrameData["image"]): Uint8Array | null {
   if (!image) return null;
   if (Buffer.isBuffer(image)) return image;
-  if (image instanceof Uint8Array) return Buffer.from(image);
-  if (image instanceof ArrayBuffer) return Buffer.from(image);
+  if (image instanceof Uint8Array) return image;
+  if (image instanceof ArrayBuffer) return new Uint8Array(image);
   return null;
+}
+
+function buildPacket(meta: unknown, imageBytes: Uint8Array): Uint8Array {
+  const metaJson = JSON.stringify(meta);
+  const metaBuf = Buffer.from(metaJson);
+  const metaLen = metaBuf.byteLength;
+  const totalLen = 4 + metaLen + imageBytes.byteLength;
+  const packet = new Uint8Array(totalLen);
+  const view = new DataView(packet.buffer, packet.byteOffset, packet.byteLength);
+
+  view.setUint32(0, metaLen, false);
+  packet.set(metaBuf, 4);
+  packet.set(imageBytes, 4 + metaLen);
+
+  return packet;
 }
 
 function broadcastFrame(frame: FrameData, streamType: StreamTypes): void {
@@ -38,17 +59,13 @@ function broadcastFrame(frame: FrameData, streamType: StreamTypes): void {
   if (!imageBytes) return;
 
   const meta = {
-    frameId: frame.frameId,
+    frameId: frame.frame_id ,
     timestamp: normalizeTimestamp(frame.timestamp),
-    cameraId: frame.cameraId,
+    cameraId: frame.camera_id,
     detections: frame.detections ?? [],
   };
 
-  const metaBuf = Buffer.from(JSON.stringify(meta));
-  const header = Buffer.allocUnsafe(4);
-  header.writeUInt32BE(metaBuf.length);
-  const packet = Buffer.concat([header, metaBuf, imageBytes]);
-  const payload = new Uint8Array(packet);
+  const payload = buildPacket(meta, imageBytes);
 
   for (const ws of streamClients) {
     if (ws.readyState !== 1) {

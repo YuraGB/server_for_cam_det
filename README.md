@@ -55,6 +55,8 @@ All runtime configuration is env-driven.
 - `PORT` (default: `3002`)
 - `GRPC_SERVER_ADDRESS` (default: `localhost:50051`)
 - `PROTO_PATH` (default: `<project>/models/detection.proto`)
+- `TEST_VIDEO_PATH` (default: `<project>/test_video.mp4`)
+- `FFMPEG_PATH` (default: `C:\ProgramData\chocolatey\bin\ffmpeg.exe`)
 - `TIMEOUT_RECONNECT_MS` (default: `3000`)
 - `MAX_FRAME_SIZE` (default: `10485760`)
 - `LOG_LEVEL` (default: `info`)
@@ -73,6 +75,7 @@ bun run start
 - `GET /` -> `OK`
 - `GET /ws?type=liveStream` -> WebSocket upgrade
 - `GET /ws?type=detectionStream` -> WebSocket upgrade
+- `GET /ws/file-frames` -> WebSocket upgrade for `test_video.mp4`
 
 If `type` is invalid, server returns `400`.
 
@@ -84,6 +87,7 @@ Connect with query param:
 
 - `ws://host:3002/ws?type=liveStream`
 - `ws://host:3002/ws?type=detectionStream`
+- `ws://host:3002/ws/file-frames`
 
 ### Leave Immediately (No Delay)
 
@@ -105,6 +109,27 @@ Server removes the socket from broadcast set before closing the connection, so f
 
 - Server sends ping payloads periodically.
 - Idle/stale sockets are closed automatically.
+
+### File Frame Events
+
+The file route sends binary websocket packets in the same format as the gRPC frame route:
+
+1. `4 bytes` big-endian unsigned int: metadata length
+2. metadata JSON bytes
+3. decoded JPEG frame bytes
+
+Frame timing follows the source video's native playback rate.
+
+Metadata JSON shape:
+
+```json
+{
+  "frameId": "file-frame-0",
+  "timestamp": 1710000000000,
+  "cameraId": "test_video.mp4",
+  "detections": []
+}
+```
 
 ## Frame Packet Format
 
