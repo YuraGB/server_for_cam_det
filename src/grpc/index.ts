@@ -4,21 +4,6 @@ import fs from "fs"
 import { broadcastFrame } from '../utils/broadcstFrame'
 import { GRPC_SERVER_ADDRESS, PROTO_PATH, TIMEOUT_RECONNECT_MS } from '../constants'
 
-if (!fs.existsSync(PROTO_PATH)) {
-  throw new Error(
-    `[Config] detection proto not found at PROTO_PATH="${PROTO_PATH}". ` +
-    `Set PROTO_PATH env var or create models/detection.proto.`
-  )
-}
-
-const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
-  keepCase: true,
-  longs: String,
-  defaults: true,
-})
-const detectionProto = grpc.loadPackageDefinition(packageDefinition) as any
-const DetectionService = detectionProto.detection.DetectionService
-
 export type StreamTypes = "liveStream" | "detectionStream"
 
 interface FrameData {
@@ -55,13 +40,37 @@ const reconnectTimers: ReconnectTimers = {
   detectionStream: null
 }
 
-const grpcClient = new DetectionService(
-  GRPC_SERVER_ADDRESS,
-  grpc.credentials.createInsecure(),
-  {
-    'grpc.max_receive_message_length': 100 * 1024 * 1024, // 100MB for video frames
+let grpcClient: any = null
+
+function getGrpcClient(): any | null {
+  if (grpcClient) return grpcClient
+
+  if (!fs.existsSync(PROTO_PATH)) {
+    console.warn(
+      `[gRPC] detection proto not found at PROTO_PATH="${PROTO_PATH}". ` +
+      `gRPC streams are disabled until the file is available.`
+    )
+    return null
   }
-)
+
+  const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    defaults: true,
+  })
+  const detectionProto = grpc.loadPackageDefinition(packageDefinition) as any
+  const DetectionService = detectionProto.detection.DetectionService
+
+  grpcClient = new DetectionService(
+    GRPC_SERVER_ADDRESS,
+    grpc.credentials.createInsecure(),
+    {
+      'grpc.max_receive_message_length': 100 * 1024 * 1024,
+    }
+  )
+
+  return grpcClient
+}
 
 function clearReconnectTimer(streamType: StreamTypes): void {
   const timer = reconnectTimers[streamType]
@@ -79,6 +88,9 @@ function scheduleReconnect(streamType: StreamTypes): void {
 }
 
 function startStream(streamType: StreamTypes) {
+  const client = getGrpcClient()
+  if (!client) return
+
   clearReconnectTimer(streamType)
 
   // Clear any existing stream
@@ -92,8 +104,8 @@ function startStream(streamType: StreamTypes) {
   reconnecting[streamType] = false
 
   const call = streamType === "liveStream" 
-    ? grpcClient.StreamLiveFrames({}) 
-    : grpcClient.StreamDetectionFrames({})
+    ? client.StreamLiveFrames({}) 
+    : client.StreamDetectionFrames({})
 
   streams[streamType] = call
 
