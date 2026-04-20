@@ -1,15 +1,15 @@
 import options from "./Elysia/imdex";
-import { startGRPCStream, stopGRPCStream } from "./grpc";
 import { APP_NAME } from "./constants";
+import { startHeartbeatMonitor } from "./websockets";
 
 const server = Bun.serve(options);
-startGRPCStream();
+const stopHeartbeatMonitor = startHeartbeatMonitor();
 
 console.log(`[${APP_NAME}] running on ${server.url}`);
 
 function shutdown(signal: string): void {
   console.log(`[${APP_NAME}] received ${signal}, shutting down...`);
-  stopGRPCStream();
+  stopHeartbeatMonitor();
   server.stop(true);
 }
 
