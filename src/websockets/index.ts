@@ -1,13 +1,26 @@
-setInterval(() => {
-  const now = Date.now();
+import { HEARTBEAT_INTERVAL_MS, HEARTBEAT_TIMEOUT_MS } from "../constants";
+import { clients } from "../Elysia/imdex";
+import type { WSData } from "../types";
 
-  for (const [streamType, streamClients] of clients) {
-    for (const ws of streamClients) {
+function startHeartbeatMonitor(): () => void {
+  const timer = setInterval(() => {
+    const now = Date.now();
+
+    for (const [peerId, ws] of clients) {
       const socket = ws as Bun.ServerWebSocket<WSData>;
-      const elapsed = now - socket.data.lastSeenAt;
+      const elapsed = now - (socket.data.lastSeenAt ?? 0);
+
+      if (socket.readyState !== 1) {
+        if (clients.get(peerId) === socket) {
+          clients.delete(peerId);
+        }
+        continue;
+      }
 
       if (elapsed > HEARTBEAT_TIMEOUT_MS) {
-        removeClient(streamType, socket);
+        if (clients.get(peerId) === socket) {
+          clients.delete(peerId);
+        }
         socket.close(1001, "heartbeat timeout");
         continue;
       }
@@ -15,8 +28,14 @@ setInterval(() => {
       try {
         socket.send('{"type":"ping"}');
       } catch {
-        removeClient(streamType, socket);
+        if (clients.get(peerId) === socket) {
+          clients.delete(peerId);
+        }
       }
     }
-  }
-}, HEARTBEAT_INTERVAL_MS);
+  }, HEARTBEAT_INTERVAL_MS);
+
+  return () => clearInterval(timer);
+}
+
+export { startHeartbeatMonitor };
