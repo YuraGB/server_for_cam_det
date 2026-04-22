@@ -1,4 +1,4 @@
-import options from "./Elysia/imdex";
+import options from "./Elysia";
 import { APP_NAME } from "./constants";
 import { startHeartbeatMonitor } from "./websockets";
 

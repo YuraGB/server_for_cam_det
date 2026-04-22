@@ -1,5 +1,5 @@
 import { HEARTBEAT_INTERVAL_MS, HEARTBEAT_TIMEOUT_MS } from "../constants";
-import { clients } from "../Elysia/imdex";
+import { clients } from "../Elysia";
 import type { WSData } from "../types";
 
 function startHeartbeatMonitor(): () => void {
