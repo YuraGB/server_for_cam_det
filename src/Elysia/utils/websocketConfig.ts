@@ -61,4 +61,6 @@ import type { RegisterMessage, SignalMessage, WSData } from "../../types";
     close(ws: Bun.ServerWebSocket<WSData>) {
       removeClientMapping(ws);
     },
-  } as Bun.WebSocketHandler<WSData>,
+  } as Bun.WebSocketHandler<WSData>;
+
+export default websocketConfig;

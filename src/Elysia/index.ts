@@ -5,8 +5,6 @@ import type {  WSData } from "../types";
 import { clients } from "./utils";
 import websocketConfig from "./utils/websocketConfig";
 
-
-
 const app = new Elysia({ name: "WebRTCSignalingServer" });
 app.get("/", () => "OK");
 app.get(HEALTH_ENDPOINT, () => ({
@@ -15,8 +13,11 @@ app.get(HEALTH_ENDPOINT, () => ({
   uptimeSeconds: Math.floor(process.uptime()),
 }));
 
+/**
+ * Custom fetch handler to manage both HTTP requests and WebSocket upgrades on the same server instance.
+ * HTTP requests to the WS_ENDPOINT will be upgraded to WebSocket connections, while other requests will be handled by Elysia's routing.
+ */
 const elysiaHandler = app.fetch;
-
 
 export default {
   port: SERVER_PORT,
