@@ -5,6 +5,9 @@ import type { RegisterMessage, SignalMessage, WSData } from "../../types";
  const websocketConfig = {
     open(ws: Bun.ServerWebSocket<WSData>) {
       ws.data.lastSeenAt = Date.now();
+      console.info("[Signaling] WS open", {
+        peerId: ws.data.peerId ?? null,
+      });
       sendJson(ws, { type: "connected" });
     },
 
@@ -46,6 +49,14 @@ import type { RegisterMessage, SignalMessage, WSData } from "../../types";
         targetPeerId?: unknown;
         [key: string]: unknown;
       };
+
+      console.info("[Signaling] WS message", {
+        fromPeerId: ws.data.peerId ?? null,
+        type: typeof typedData.type === "string" ? typedData.type : null,
+        peerId: typeof typedData.peerId === "string" ? typedData.peerId : null,
+        targetPeerId: typeof typedData.targetPeerId === "string" ? typedData.targetPeerId : null,
+      });
+
       if (typedData.type === "pong") {
         return;
       }
@@ -59,6 +70,9 @@ import type { RegisterMessage, SignalMessage, WSData } from "../../types";
     },
 
     close(ws: Bun.ServerWebSocket<WSData>) {
+      console.info("[Signaling] WS close", {
+        peerId: ws.data.peerId ?? null,
+      });
       removeClientMapping(ws);
     },
   } as Bun.WebSocketHandler<WSData>;

@@ -27,6 +27,12 @@ export default {
     const url = new URL(req.url);
 
     if (url.pathname === WS_ENDPOINT) {
+      console.info("[Signaling] WS upgrade requested", {
+        pathname: url.pathname,
+        search: url.search,
+        userAgent: req.headers.get("user-agent") ?? "unknown",
+      });
+
       const success = server.upgrade(req, {
         data: {
           lastSeenAt: Date.now(),
@@ -34,6 +40,10 @@ export default {
       });
 
       if (success) return;
+      console.warn("[Signaling] WS upgrade failed", {
+        pathname: url.pathname,
+        search: url.search,
+      });
       return new Response("WS upgrade failed", { status: 400 });
     }
 

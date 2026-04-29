@@ -32,6 +32,10 @@ function removeClientMapping(ws: Bun.ServerWebSocket<WSData>): void {
     clients.delete(peerId);
   }
 
+  console.info("[Signaling] Peer mapping removed", {
+    peerId,
+    remainingPeers: clients.size,
+  });
   delete ws.data.peerId;
 }
 
@@ -46,12 +50,19 @@ function handleRegister(ws: Bun.ServerWebSocket<WSData>, data: RegisterMessage):
 
   const existingClient = clients.get(peerId);
   if (existingClient && existingClient !== ws) {
+    console.warn("[Signaling] Peer replaced", {
+      peerId,
+    });
     sendJson(existingClient, { type: "error", code: "PEER_REPLACED", message: "Peer re-registered from another connection." });
     existingClient.close(4001, "peer replaced");
   }
 
   ws.data.peerId = peerId;
   clients.set(peerId, ws);
+  console.info("[Signaling] Peer registered", {
+    peerId,
+    peers: clients.size,
+  });
   sendJson(ws, { type: "registered", peerId });
 }
 
@@ -78,16 +89,31 @@ function handleForward(ws: Bun.ServerWebSocket<WSData>, data: SignalMessage): vo
 
   const target = clients.get(data.targetPeerId);
   if (!target || target.readyState !== 1) {
+    console.warn("[Signaling] Target not found", {
+      fromPeerId: ws.data.peerId,
+      targetPeerId: data.targetPeerId,
+      type: data.type,
+    });
     sendJson(ws, { type: "error", code: "TARGET_NOT_FOUND", message: `Peer ${data.targetPeerId} is not connected.` });
     return;
   }
 
+  console.info("[Signaling] Forward", {
+    fromPeerId: ws.data.peerId,
+    targetPeerId: data.targetPeerId,
+    type: data.type,
+  });
   const forwarded = sendJson(target, {
     ...data,
     peerId: ws.data.peerId,
   });
 
   if (!forwarded) {
+    console.error("[Signaling] Forward failed", {
+      fromPeerId: ws.data.peerId,
+      targetPeerId: data.targetPeerId,
+      type: data.type,
+    });
     removeClientMapping(target);
     target.close(1011, "send failed");
     sendJson(ws, { type: "error", code: "TARGET_SEND_FAILED", message: `Failed to deliver message to ${data.targetPeerId}.` });
@@ -97,8 +123,8 @@ function handleForward(ws: Bun.ServerWebSocket<WSData>, data: SignalMessage): vo
 export {
   sendJson,
   isNonEmptyString,
-    normalizeMessage,
-    removeClientMapping,
-    handleRegister,
-    handleForward,
+  normalizeMessage,
+  removeClientMapping,
+  handleRegister,
+  handleForward,
 }
