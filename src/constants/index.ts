@@ -4,6 +4,8 @@ import { fileURLToPath } from "url";
 const DEFAULT_SERVER_PORT = 3002;
 const DEFAULT_MAX_SIGNALING_MESSAGE_BYTES = 256 * 1024;
 const DEFAULT_LOG_LEVEL = "info";
+const DEFAULT_AUTH_JWT_ISSUER = "cam_frontend";
+const DEFAULT_AUTH_JWT_AUDIENCE = "cam_serv";
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_TIMEOUT_MS = 40_000;
 
@@ -21,6 +23,9 @@ const WS_ENDPOINT = "/ws";
 const HEALTH_ENDPOINT = "/health";
 const APP_NAME = "WebRTCSignalingServer";
 const LOG_LEVEL = process.env.LOG_LEVEL?.trim() || DEFAULT_LOG_LEVEL;
+const AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET?.trim() || "";
+const AUTH_JWT_ISSUER = process.env.AUTH_JWT_ISSUER?.trim() || DEFAULT_AUTH_JWT_ISSUER;
+const AUTH_JWT_AUDIENCE = process.env.AUTH_JWT_AUDIENCE?.trim() || DEFAULT_AUTH_JWT_AUDIENCE;
 const MAX_SIGNALING_MESSAGE_BYTES = parsePositiveInt(
   process.env.MAX_SIGNALING_MESSAGE_BYTES,
   DEFAULT_MAX_SIGNALING_MESSAGE_BYTES
@@ -36,6 +41,9 @@ export {
     HEALTH_ENDPOINT,
     APP_NAME,
     LOG_LEVEL,
+    AUTH_JWT_SECRET,
+    AUTH_JWT_ISSUER,
+    AUTH_JWT_AUDIENCE,
     MAX_SIGNALING_MESSAGE_BYTES,
     HEARTBEAT_INTERVAL_MS,
     HEARTBEAT_TIMEOUT_MS,

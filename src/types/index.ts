@@ -1,6 +1,35 @@
 export type WSData = {
   peerId?: string;
   lastSeenAt?: number;
+  auth?: AuthContext;
+};
+
+
+export type AuthResult =
+  | { ok: true; auth: AuthContext }
+  | { ok: false; status: number; code: string; message: string };
+
+
+export type AuthClaims = {
+  sub: string;
+  iss: string;
+  aud: string | string[];
+  exp: number;
+  iat?: number;
+  email?: string;
+  role?: string;
+  roles?: string[];
+  permissions?: string[];
+  [key: string]: unknown;
+};
+
+export type AuthContext = {
+  userId: string;
+  email?: string;
+  role?: string;
+  roles: string[];
+  permissions: string[];
+  claims: AuthClaims;
 };
 
 export type RegisterMessage = {

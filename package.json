@@ -9,12 +9,18 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "drizzle-kit": "^0.31.10"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "elysia": "^1.4.28"
+    "@elysia/cors": "^1.4.2",
+    "@elysia/server-timing": "^1.4.1",
+    "drizzle-orm": "^0.45.2",
+    "elysia": "^1.4.28",
+    "elysia-ip": "^1.1.0",
+    "ioredis": "^5.10.1"
   }
 }

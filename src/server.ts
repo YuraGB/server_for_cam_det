@@ -1,6 +1,6 @@
 import options from "./Elysia";
 import { APP_NAME } from "./constants";
-import { startHeartbeatMonitor } from "./websockets";
+import { startHeartbeatMonitor } from "./Elysia/modules/websockets";
 
 const server = Bun.serve(options);
 const stopHeartbeatMonitor = startHeartbeatMonitor();
