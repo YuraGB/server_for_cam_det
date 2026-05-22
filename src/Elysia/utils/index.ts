@@ -1,4 +1,4 @@
-import { MAX_PEER_ID_LENGTH, RESERVED_MESSAGE_TYPES } from "../../constants";
+import { ALLOWED_ORIGINS, MAX_PEER_ID_LENGTH, RESERVED_MESSAGE_TYPES } from "../../constants";
 import type { RegisterMessage, SignalMessage, WSData } from "../../types";
 
 export const clients = new Map<string, Bun.ServerWebSocket<WSData>>();
@@ -94,6 +94,21 @@ function handleForward(ws: Bun.ServerWebSocket<WSData>, data: SignalMessage): vo
   }
 }
 
+const isTrustedOrigin = (request: Request): boolean => {
+  const origin = request.headers.get("Origin");
+  if (!origin) return false;
+  return ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*");
+};
+
+const getIPFromRequest = (request: Request, server?: Bun.Server<unknown> | null): string | null => {
+      // derive client IP from headers or the underlying socket if available
+    const headerIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip')
+    if (headerIp) return headerIp
+
+    const socketIp = server?.requestIP(request)
+    return typeof socketIp === "string" ? socketIp : null
+}
+
 export {
   sendJson,
   isNonEmptyString,
@@ -101,4 +116,5 @@ export {
     removeClientMapping,
     handleRegister,
     handleForward,
+    isTrustedOrigin
 }

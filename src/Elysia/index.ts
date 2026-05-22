@@ -2,34 +2,55 @@ import Elysia from "elysia";
 import type { Serve } from "bun";
 import { HEALTH_ENDPOINT, SERVER_PORT, WS_ENDPOINT } from "../constants";
 import type {  WSData } from "../types";
-import { clients } from "./utils";
-import websocketConfig from "./utils/websocketConfig";
-
-const app = new Elysia({ name: "WebRTCSignalingServer" });
-app.get("/", () => "OK");
-app.get(HEALTH_ENDPOINT, () => ({
-  status: "ok",
-  peers: clients.size,
-  uptimeSeconds: Math.floor(process.uptime()),
-}));
+import { clients, getIPFromRequest, isTrustedOrigin } from "./utils";
+import websocketConfig from "./modules/websockets/websocketConfig";
+import { authenticateRequest } from "./modules/Authentication";
+import { routes } from "./modules/Routes";
+import { canConnect } from "./modules/websockets/wsLimits";
+import { authenticateWebSocket, validationWebsoketConnection } from "./modules/websockets";
 
 /**
- * Custom fetch handler to manage both HTTP requests and WebSocket upgrades on the same server instance.
- * HTTP requests to the WS_ENDPOINT will be upgraded to WebSocket connections, while other requests will be handled by Elysia's routing.
+ * Main Elysia application instance that serves both HTTP routes and WebSocket connections for the WebRTC signaling server.
+ * The fetch handler is customized to upgrade HTTP requests to WebSocket connections when the WS_ENDPOINT is hit, while still allowing Elysia to handle regular HTTP routes defined in the Routes module.
  */
+const app = new Elysia({ name: "WebRTCSignalingServer" })
+  .use(routes)
 const elysiaHandler = app.fetch;
 
+
+/**
+ * Serve options for Bun.
+ * The fetch function is overridden to handle WebSocket upgrade requests at the WS_ENDPOINT,
+ * while delegating other HTTP requests to the Elysia handler. It also includes origin validation and authentication for WebSocket connections.
+ * The websocketConfig object defines the handlers for WebSocket events such as connection open and message reception.
+ */
 export default {
   port: SERVER_PORT,
 
   // Handle HTTP requests and upgrade to WebSocket when the WS_ENDPOINT is hit
-  fetch(req, server) {
+  async fetch(req, server) {
     const url = new URL(req.url);
 
-    if (url.pathname === WS_ENDPOINT) {
+    if (url.pathname === WS_ENDPOINT) {   
+      const validationWsConnection = await validationWebsoketConnection(req, server);
+      if (validationWsConnection instanceof Response) {
+        return validationWsConnection;
+      }
+
+      const authResult = await authenticateWebSocket(req);
+      if (!authResult.success) {
+        return authResult.error ?? new Response("Unauthorized", { status: 401 });
+      }
+           
+      if(!authResult.auth) {
+        return new Response("Authentication failed", { status: 401 });
+      }
+
+      // Upgrade to WebSocket and pass the authenticated user info in the connection data
       const success = server.upgrade(req, {
         data: {
           lastSeenAt: Date.now(),
+          auth: authResult.auth,
         },
       });
 
@@ -40,6 +61,6 @@ export default {
     return elysiaHandler(req);
   },
 
-  // WebSocket handlers are managed separately in ./utils/websocketConfig.ts
+  // WebSocket handlers are managed separately in ./modules/websockets/websocketConfig.ts
   websocket: websocketConfig,
 } satisfies Serve.Options<WSData>;

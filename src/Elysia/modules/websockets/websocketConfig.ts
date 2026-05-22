@@ -1,6 +1,6 @@
-import { handleForward, handleRegister, isNonEmptyString, removeClientMapping, normalizeMessage, sendJson } from ".";
-import { MAX_PEER_ID_LENGTH, MAX_SIGNALING_MESSAGE_BYTES } from "../../constants";
-import type { RegisterMessage, SignalMessage, WSData } from "../../types";
+import { handleForward, handleRegister, isNonEmptyString, removeClientMapping, normalizeMessage, sendJson } from "../../utils";
+import { MAX_PEER_ID_LENGTH, MAX_SIGNALING_MESSAGE_BYTES } from "../../../constants";
+import type { RegisterMessage, SignalMessage, WSData } from "../../../types";
 
  const websocketConfig = {
     open(ws: Bun.ServerWebSocket<WSData>) {
