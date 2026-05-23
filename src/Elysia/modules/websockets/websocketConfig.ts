@@ -1,6 +1,7 @@
-import { handleForward, handleRegister, isNonEmptyString, removeClientMapping, normalizeMessage, sendJson } from "../../utils";
-import { MAX_PEER_ID_LENGTH, MAX_SIGNALING_MESSAGE_BYTES } from "../../../constants";
-import type { RegisterMessage, SignalMessage, WSData } from "../../../types";
+import { handleForward, handleRegister, isNonEmptyString, removeClientMapping, normalizeMessage, sendJson } from "@/Elysia/utils";
+import { MAX_PEER_ID_LENGTH, MAX_SIGNALING_MESSAGE_BYTES } from "@/constants";
+import type { RegisterMessage, SignalMessage, WSData } from "@/types";
+import { disconnect } from "./wsLimits";
 
  const websocketConfig = {
     open(ws: Bun.ServerWebSocket<WSData>) {
@@ -60,6 +61,7 @@ import type { RegisterMessage, SignalMessage, WSData } from "../../../types";
 
     close(ws: Bun.ServerWebSocket<WSData>) {
       removeClientMapping(ws);
+      disconnect(ws.data.ip);
     },
   } as Bun.WebSocketHandler<WSData>;
 

@@ -1,8 +1,8 @@
-import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { Database } from 'bun:sqlite';
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { Database } from "bun:sqlite";
 import { shadowUsers } from "./schema";
 
-const sqlite = new Database('db.sqlite');
+const sqlite = new Database("db.sqlite");
 const db = drizzle({ client: sqlite });
 
 sqlite.exec(`
@@ -20,7 +20,5 @@ sqlite.exec(`
   )
 `);
 
-
-
 export default db;
-export { shadowUsers, upsertShadowUser };
+export { shadowUsers };

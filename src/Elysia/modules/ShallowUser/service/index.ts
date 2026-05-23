@@ -1,4 +1,5 @@
 import db, { shadowUsers } from "@/db/drizzle";
+import { eq } from "drizzle-orm";
 
 export async function upsertShadowUser(input: {
   externalUserId: string;
@@ -12,17 +13,19 @@ export async function upsertShadowUser(input: {
 
   await db
     .insert(shadowUsers)
-    .values([{
-      externalUserId: input.externalUserId,
-      email: input.email,
-      role: input.role,
-      rolesJson: JSON.stringify(input.roles),
-      permissionsJson: JSON.stringify(input.permissions),
-      authIssuer: input.authIssuer,
-      lastLoginAt: now,
-      createdAt: now,
-      updatedAt: now,
-    }])
+    .values([
+      {
+        externalUserId: input.externalUserId,
+        email: input.email,
+        role: input.role,
+        rolesJson: JSON.stringify(input.roles),
+        permissionsJson: JSON.stringify(input.permissions),
+        authIssuer: input.authIssuer,
+        lastLoginAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])
     .onConflictDoUpdate({
       target: shadowUsers.externalUserId,
       set: {
@@ -39,15 +42,15 @@ export async function upsertShadowUser(input: {
 
 export async function getShadowUserByExternalId(externalUserId: string) {
   try {
-  const user = await db
-    .select()
-    .from(shadowUsers)
-    .where(shadowUsers.externalUserId.equals(externalUserId))
-    .limit(1)
-    .then(rows => rows[0] || null);
+    const user = await db
+      .select()
+      .from(shadowUsers)
+      .where(eq(shadowUsers.externalUserId, externalUserId))
+      .limit(1)
+      .then((rows) => rows[0] || null);
 
-  return user;
-  } catch(error) {
+    return user;
+  } catch (error) {
     console.error("Failed to get shadow user by external ID:", error);
     return null;
   }
