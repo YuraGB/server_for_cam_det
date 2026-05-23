@@ -1,14 +1,13 @@
 export type WSData = {
+  ip: string;
   peerId?: string;
   lastSeenAt?: number;
   auth?: AuthContext;
 };
 
-
 export type AuthResult =
   | { ok: true; auth: AuthContext }
   | { ok: false; status: number; code: string; message: string };
-
 
 export type AuthClaims = {
   sub: string;

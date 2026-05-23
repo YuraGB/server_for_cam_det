@@ -85,32 +85,13 @@ or for browser WebSocket clients:
 ws://host:3002/ws?access_token=<jwt>
 ```
 
-Required JWT claims:
+⚠️ **Security Warning**: Query parameter is a fallback only.
+- In production, use **`wss://`** (encrypted) exclusively
+- Use short-lived tokens (low TTL)
+- Ensure reverse proxies, CDNs, and monitoring services do not log/cache `access_token`
+- Prefer `Authorization` header when possible
 
-- `sub` user id
-- `iss` must match `AUTH_JWT_ISSUER`
-- `aud` must include `AUTH_JWT_AUDIENCE`
-- `exp` unix timestamp in seconds
-
-Optional claims already supported:
-
-- `email`
-- `role`
-- `roles`
-- `permissions`
-
-After successful JWT verification, `cam_serv` upserts the authenticated user into its local `shadow_users` table in `db.sqlite`. This keeps auth ownership in the frontend auth server while still letting the signaling server store local user state and server-specific metadata.
-
-## Server Messages
-
-The server may send:
-
-- `{"type":"connected"}` after socket open
-- `{"type":"registered","peerId":"alice"}` after successful register
-- `{"type":"ping"}` as heartbeat
-- `{"type":"error", ...}` for invalid payloads, missing target, duplicate peer replacement, and size violations
-
-## Production Notes
+## Security Features
 
 - peer registration is validated before forwarding is allowed
 - duplicate `peerId` registration replaces the old connection cleanly

@@ -1,12 +1,10 @@
 import Elysia from "elysia";
 import type { Serve } from "bun";
-import { HEALTH_ENDPOINT, SERVER_PORT, WS_ENDPOINT } from "../constants";
+import {  SERVER_PORT, WS_ENDPOINT } from "../constants";
 import type {  WSData } from "../types";
-import { clients, getIPFromRequest, isTrustedOrigin } from "./utils";
+import {  getIPFromRequest } from "./utils";
 import websocketConfig from "./modules/websockets/websocketConfig";
-import { authenticateRequest } from "./modules/Authentication";
 import { routes } from "./modules/Routes";
-import { canConnect } from "./modules/websockets/wsLimits";
 import { authenticateWebSocket, validationWebsoketConnection } from "./modules/websockets";
 
 /**
@@ -32,7 +30,7 @@ export default {
     const url = new URL(req.url);
 
     if (url.pathname === WS_ENDPOINT) {   
-      const validationWsConnection = await validationWebsoketConnection(req, server);
+      const validationWsConnection: Response | true = await validationWebsoketConnection(req, server);
       if (validationWsConnection instanceof Response) {
         return validationWsConnection;
       }
@@ -46,9 +44,12 @@ export default {
         return new Response("Authentication failed", { status: 401 });
       }
 
+      const ip = getIPFromRequest(req, server) ?? "unknown";
+
       // Upgrade to WebSocket and pass the authenticated user info in the connection data
       const success = server.upgrade(req, {
         data: {
+          ip,
           lastSeenAt: Date.now(),
           auth: authResult.auth,
         },

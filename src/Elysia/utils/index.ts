@@ -1,4 +1,8 @@
-import { ALLOWED_ORIGINS, MAX_PEER_ID_LENGTH, RESERVED_MESSAGE_TYPES } from "../../constants";
+import {
+  ALLOWED_ORIGINS,
+  MAX_PEER_ID_LENGTH,
+  RESERVED_MESSAGE_TYPES,
+} from "../../constants";
 import type { RegisterMessage, SignalMessage, WSData } from "../../types";
 
 export const clients = new Map<string, Bun.ServerWebSocket<WSData>>();
@@ -12,15 +16,26 @@ function sendJson(ws: Bun.ServerWebSocket<WSData>, payload: unknown): boolean {
   }
 }
 
-function isNonEmptyString(value: unknown, maxLength = Number.MAX_SAFE_INTEGER): value is string {
-  return typeof value === "string" && value.trim().length > 0 && value.trim().length <= maxLength;
+function isNonEmptyString(
+  value: unknown,
+  maxLength = Number.MAX_SAFE_INTEGER,
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.trim().length <= maxLength
+  );
 }
 
-function normalizeMessage(message: string | Buffer | Uint8Array | ArrayBuffer): string | null {
+function normalizeMessage(
+  message: string | Buffer | Uint8Array | ArrayBuffer,
+): string | null {
   if (typeof message === "string") return message;
   if (message instanceof Buffer) return message.toString("utf8");
-  if (message instanceof Uint8Array) return Buffer.from(message).toString("utf8");
-  if (message instanceof ArrayBuffer) return Buffer.from(message).toString("utf8");
+  if (message instanceof Uint8Array)
+    return Buffer.from(message).toString("utf8");
+  if (message instanceof ArrayBuffer)
+    return Buffer.from(message).toString("utf8");
   return null;
 }
 
@@ -35,10 +50,17 @@ function removeClientMapping(ws: Bun.ServerWebSocket<WSData>): void {
   delete ws.data.peerId;
 }
 
-function handleRegister(ws: Bun.ServerWebSocket<WSData>, data: RegisterMessage): void {
+function handleRegister(
+  ws: Bun.ServerWebSocket<WSData>,
+  data: RegisterMessage,
+): void {
   const peerId = data.peerId.trim();
   if (!isNonEmptyString(peerId, MAX_PEER_ID_LENGTH)) {
-    sendJson(ws, { type: "error", code: "INVALID_PEER_ID", message: "peerId is required." });
+    sendJson(ws, {
+      type: "error",
+      code: "INVALID_PEER_ID",
+      message: "peerId is required.",
+    });
     return;
   }
 
@@ -46,7 +68,11 @@ function handleRegister(ws: Bun.ServerWebSocket<WSData>, data: RegisterMessage):
 
   const existingClient = clients.get(peerId);
   if (existingClient && existingClient !== ws) {
-    sendJson(existingClient, { type: "error", code: "PEER_REPLACED", message: "Peer re-registered from another connection." });
+    sendJson(existingClient, {
+      type: "error",
+      code: "PEER_REPLACED",
+      message: "Peer re-registered from another connection.",
+    });
     existingClient.close(4001, "peer replaced");
   }
 
@@ -55,30 +81,56 @@ function handleRegister(ws: Bun.ServerWebSocket<WSData>, data: RegisterMessage):
   sendJson(ws, { type: "registered", peerId });
 }
 
-function handleForward(ws: Bun.ServerWebSocket<WSData>, data: SignalMessage): void {
+function handleForward(
+  ws: Bun.ServerWebSocket<WSData>,
+  data: SignalMessage,
+): void {
   if (!ws.data.peerId) {
-    sendJson(ws, { type: "error", code: "NOT_REGISTERED", message: "Register peerId before sending signaling messages." });
+    sendJson(ws, {
+      type: "error",
+      code: "NOT_REGISTERED",
+      message: "Register peerId before sending signaling messages.",
+    });
     return;
   }
 
   if (!isNonEmptyString(data.targetPeerId, MAX_PEER_ID_LENGTH)) {
-    sendJson(ws, { type: "error", code: "INVALID_TARGET", message: "targetPeerId is required." });
+    sendJson(ws, {
+      type: "error",
+      code: "INVALID_TARGET",
+      message: "targetPeerId is required.",
+    });
     return;
   }
 
-  if (!isNonEmptyString(data.type, MAX_PEER_ID_LENGTH) || RESERVED_MESSAGE_TYPES.has(data.type)) {
-    sendJson(ws, { type: "error", code: "INVALID_TYPE", message: "Unsupported signaling message type." });
+  if (
+    !isNonEmptyString(data.type, MAX_PEER_ID_LENGTH) ||
+    RESERVED_MESSAGE_TYPES.has(data.type)
+  ) {
+    sendJson(ws, {
+      type: "error",
+      code: "INVALID_TYPE",
+      message: "Unsupported signaling message type.",
+    });
     return;
   }
 
   if (data.targetPeerId === ws.data.peerId) {
-    sendJson(ws, { type: "error", code: "SELF_TARGET", message: "targetPeerId must be different from peerId." });
+    sendJson(ws, {
+      type: "error",
+      code: "SELF_TARGET",
+      message: "targetPeerId must be different from peerId.",
+    });
     return;
   }
 
   const target = clients.get(data.targetPeerId);
   if (!target || target.readyState !== 1) {
-    sendJson(ws, { type: "error", code: "TARGET_NOT_FOUND", message: `Peer ${data.targetPeerId} is not connected.` });
+    sendJson(ws, {
+      type: "error",
+      code: "TARGET_NOT_FOUND",
+      message: `Peer ${data.targetPeerId} is not connected.`,
+    });
     return;
   }
 
@@ -90,7 +142,11 @@ function handleForward(ws: Bun.ServerWebSocket<WSData>, data: SignalMessage): vo
   if (!forwarded) {
     removeClientMapping(target);
     target.close(1011, "send failed");
-    sendJson(ws, { type: "error", code: "TARGET_SEND_FAILED", message: `Failed to deliver message to ${data.targetPeerId}.` });
+    sendJson(ws, {
+      type: "error",
+      code: "TARGET_SEND_FAILED",
+      message: `Failed to deliver message to ${data.targetPeerId}.`,
+    });
   }
 }
 
@@ -100,21 +156,29 @@ const isTrustedOrigin = (request: Request): boolean => {
   return ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*");
 };
 
-const getIPFromRequest = (request: Request, server?: Bun.Server<unknown> | null): string | null => {
-      // derive client IP from headers or the underlying socket if available
-    const headerIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip')
-    if (headerIp) return headerIp
+const getIPFromRequest = (
+  request: Request,
+  server?: Bun.Server<unknown> | null,
+): string | null => {
+  // derive client IP from headers or the underlying socket if available
+  const headerIp =
+    request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip");
+  if (headerIp) return headerIp;
 
-    const socketIp = server?.requestIP(request)
-    return typeof socketIp === "string" ? socketIp : null
-}
+  const socketIp = server?.requestIP(request);
+  if (socketIp && typeof socketIp === "object" && "address" in socketIp) {
+    return socketIp.address;
+  }
+  return null;
+};
 
 export {
   sendJson,
   isNonEmptyString,
-    normalizeMessage,
-    removeClientMapping,
-    handleRegister,
-    handleForward,
-    isTrustedOrigin
-}
+  normalizeMessage,
+  removeClientMapping,
+  handleRegister,
+  handleForward,
+  isTrustedOrigin,
+  getIPFromRequest,
+};
