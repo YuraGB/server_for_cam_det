@@ -1,28 +1,55 @@
-const connectionsPerIp = new Map<string, number>();
+import Redis from "ioredis";
+
+const redis = new Redis();
 
 const MAX_CONNECTIONS_PER_IP = 10;
 
-export function canConnect(ip: string) {
-  const count = connectionsPerIp.get(ip) ?? 0;
+// seconds
+const CONNECTION_TTL = 120;
 
-  if (count >= MAX_CONNECTIONS_PER_IP) {
-    return false;
+function getKey(ip: string) {
+  return `ws:connections:${ip}`;
+}
+
+export async function canConnect(ip: string): Promise<boolean> {
+  const key = getKey(ip);
+
+  // Increment current connections
+  const count = await redis.incr(key);
+
+  // Set TTL only for new keys
+  if (count === 1) {
+    await redis.expire(key, CONNECTION_TTL);
   }
 
-  connectionsPerIp.set(ip, count + 1);
+  // Too many connections
+  if (count > MAX_CONNECTIONS_PER_IP) {
+    // rollback increment
+    await redis.decr(key);
+
+    return false;
+  }
 
   return true;
 }
 
-export function disconnect(ip: string) {
-  const count = connectionsPerIp.get(ip);
+export async function disconnect(ip: string): Promise<void> {
+  const key = getKey(ip);
 
-  if (!count) return;
+  const count = await redis.decr(key);
 
-  if (count <= 1) {
-    connectionsPerIp.delete(ip);
-    return;
+  // Cleanup broken/negative counters
+  if (count <= 0) {
+    await redis.del(key);
   }
+}
 
-  connectionsPerIp.set(ip, count - 1);
+/**
+ * Refresh TTL for active sockets.
+ * Call this on pong / heartbeat.
+ */
+export async function refreshConnection(ip: string): Promise<void> {
+  const key = getKey(ip);
+
+  await redis.expire(key, CONNECTION_TTL);
 }

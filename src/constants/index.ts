@@ -44,10 +44,10 @@ const MAX_SIGNALING_MESSAGE_BYTES = parsePositiveInt(
 const MAX_PEER_ID_LENGTH = 128;
 const RESERVED_MESSAGE_TYPES = new Set(["register", "ping", "pong"]);
 
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || [
-  "https://site.com",
-  "http://localhost:3000",
-];
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",").map((origin) =>
+  origin.trim(),
+) || ["http://localhost:3000"];
+
 const ALLOWED_HTTP_METHODS = process.env.ALLOWED_HTTP_METHODS?.split(",").map(
   (method) => method.trim().toUpperCase(),
 ) || ["GET", "POST", "OPTIONS"];
