@@ -14,33 +14,43 @@ function getKey(ip: string) {
 export async function canConnect(ip: string): Promise<boolean> {
   const key = getKey(ip);
 
-  // Increment current connections
-  const count = await redis.incr(key);
+  try {
+    // Increment current connections
+    const count = await redis.incr(key);
 
-  // Set TTL only for new keys
-  if (count === 1) {
-    await redis.expire(key, CONNECTION_TTL);
+    // Set TTL only for new keys
+    if (count === 1) {
+      await redis.expire(key, CONNECTION_TTL);
+    }
+
+    // Too many connections
+    if (count > MAX_CONNECTIONS_PER_IP) {
+      // rollback increment
+      await redis.decr(key);
+
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    // In case of Redis errors, allow connection to avoid false positives
+    console.error("Redis error in canConnect:", error);
+    return true;
   }
-
-  // Too many connections
-  if (count > MAX_CONNECTIONS_PER_IP) {
-    // rollback increment
-    await redis.decr(key);
-
-    return false;
-  }
-
-  return true;
 }
 
 export async function disconnect(ip: string): Promise<void> {
   const key = getKey(ip);
 
-  const count = await redis.decr(key);
+  try {
+    const count = await redis.decr(key);
 
-  // Cleanup broken/negative counters
-  if (count <= 0) {
-    await redis.del(key);
+    // Cleanup broken/negative counters
+    if (count <= 0) {
+      await redis.del(key);
+    }
+  } catch (error) {
+    console.error("Redis error in disconnect:", error);
   }
 }
 
