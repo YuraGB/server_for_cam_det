@@ -31,7 +31,7 @@ export default {
     const url = new URL(req.url);
 
     if (url.pathname === WS_ENDPOINT) {
-      const validationWsConnection: Response | true =
+      const validationWsConnection: Response | boolean =
         await validationWebsoketConnection(req, server);
       if (validationWsConnection instanceof Response) {
         return validationWsConnection;
