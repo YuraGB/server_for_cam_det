@@ -7,10 +7,12 @@
     "start": "bun run src/server.ts",
     "dev": "bun --watch run src/server.ts",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:sync": "bunx drizzle-kit generate && bunx drizzle-kit migrate"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "better-sqlite3": "^12.10.0",
     "drizzle-kit": "^0.31.10",
     "prettier": "3.8.3"
   },

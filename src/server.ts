@@ -1,6 +1,11 @@
 import options from "./Elysia";
 import { APP_NAME } from "./constants";
 import { startHeartbeatMonitor } from "./Elysia/modules/websockets";
+import db from "./db/drizzle";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+
+// Run database migrations before starting the server
+await migrate(db, { migrationsFolder: "./drizzle" });
 
 const server = Bun.serve(options);
 const stopHeartbeatMonitor = startHeartbeatMonitor();
