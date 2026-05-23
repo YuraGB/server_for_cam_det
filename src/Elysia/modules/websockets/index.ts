@@ -46,7 +46,7 @@ function startHeartbeatMonitor(): () => void {
 async function validationWebsoketConnection(
   request: Request,
   server: Bun.Server<unknown>,
-): Promise<Response | true> {
+): Promise<Response | boolean> {
   // Validate the Origin header to prevent unauthorized cross-origin WebSocket connections
   const isValidOrigin = isTrustedOrigin(request);
   if (!isValidOrigin) {
@@ -54,7 +54,7 @@ async function validationWebsoketConnection(
   }
 
   const ip = getIPFromRequest(request, server) ?? "unknown";
-  const isAllowed = canConnect(ip);
+  const isAllowed = await canConnect(ip);
 
   if (!isAllowed) {
     return new Response("Too Many Requests", { status: 429 });

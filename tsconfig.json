@@ -13,6 +13,8 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
 
     // Best practices
     "strict": true,
@@ -27,7 +29,6 @@
     "noPropertyAccessFromIndexSignature": false,
 
     // Path aliases
-    "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     }
