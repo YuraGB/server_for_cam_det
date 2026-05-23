@@ -28,9 +28,8 @@ if (
   AUTH_JWT_SECRET.length < 32 ||
   AUTH_JWT_SECRET.includes("replace-with-shared-service-token-secret")
 ) {
-  console.log(AUTH_JWT_SECRET);
   throw new Error(
-    `AUTH_JWT_SECRET must be a strong secret (>=32 chars) and not a placeholder. ${AUTH_JWT_SECRET}`,
+    `AUTH_JWT_SECRET must be a strong secret (>=32 chars) and not a placeholder.`,
   );
 }
 const AUTH_JWT_ISSUER =
