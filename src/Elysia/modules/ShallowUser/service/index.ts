@@ -11,33 +11,38 @@ export async function upsertShadowUser(input: {
 }): Promise<void> {
   const now = new Date();
 
-  await db
-    .insert(shadowUsers)
-    .values([
-      {
-        externalUserId: input.externalUserId,
-        email: input.email,
-        role: input.role,
-        rolesJson: JSON.stringify(input.roles),
-        permissionsJson: JSON.stringify(input.permissions),
-        authIssuer: input.authIssuer,
-        lastLoginAt: now,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ])
-    .onConflictDoUpdate({
-      target: shadowUsers.externalUserId,
-      set: {
-        email: input.email,
-        role: input.role,
-        rolesJson: JSON.stringify(input.roles),
-        permissionsJson: JSON.stringify(input.permissions),
-        authIssuer: input.authIssuer,
-        lastLoginAt: now,
-        updatedAt: now,
-      },
-    });
+  try {
+    await db
+      .insert(shadowUsers)
+      .values([
+        {
+          externalUserId: input.externalUserId,
+          email: input.email,
+          role: input.role,
+          rolesJson: JSON.stringify(input.roles),
+          permissionsJson: JSON.stringify(input.permissions),
+          authIssuer: input.authIssuer,
+          lastLoginAt: now,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      .onConflictDoUpdate({
+        target: shadowUsers.externalUserId,
+        set: {
+          email: input.email,
+          role: input.role,
+          rolesJson: JSON.stringify(input.roles),
+          permissionsJson: JSON.stringify(input.permissions),
+          authIssuer: input.authIssuer,
+          lastLoginAt: now,
+          updatedAt: now,
+        },
+      });
+  } catch (error) {
+    console.error("Failed to upsert shadow user:", error);
+    throw error;
+  }
 }
 
 export async function getShadowUserByExternalId(externalUserId: string) {

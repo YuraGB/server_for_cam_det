@@ -1,6 +1,9 @@
 import Redis from "ioredis";
 
 const redis = new Redis();
+redis.on("error", (err) => {
+  console.error("Redis connection error:", err);
+});
 
 const MAX_CONNECTIONS_PER_IP = 10;
 

@@ -1,5 +1,7 @@
+import { createRemoteJWKSet } from "jose/jwks/remote";
 import {
   ALLOWED_ORIGINS,
+  jwksCache,
   MAX_PEER_ID_LENGTH,
   RESERVED_MESSAGE_TYPES,
 } from "../../constants";
@@ -153,7 +155,7 @@ function handleForward(
 const isTrustedOrigin = (request: Request): boolean => {
   const origin = request.headers.get("Origin");
   if (!origin) return false;
-  return ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*");
+  return ALLOWED_ORIGINS.includes(origin);
 };
 
 const getIPFromRequest = (
@@ -172,6 +174,27 @@ const getIPFromRequest = (
   return null;
 };
 
+/**
+ * Get the JSON Web Key Set (JWKS) for a given tenant.
+ * This function constructs the JWKS URL based on the tenant's origin and caches the JWKSet function for future use.
+ *
+ * @param tenant
+ * @returns
+ */
+function getJWKS(origin: string) {
+  if (!ALLOWED_ORIGINS.includes(origin)) {
+    throw new Error("Invalid origin");
+  }
+
+  if (!jwksCache.has(origin)) {
+    const url = new URL("/api/auth/jwks", origin);
+
+    jwksCache.set(origin, createRemoteJWKSet(url));
+  }
+
+  return jwksCache.get(origin)!;
+}
+
 export {
   sendJson,
   isNonEmptyString,
@@ -181,4 +204,5 @@ export {
   handleForward,
   isTrustedOrigin,
   getIPFromRequest,
+  getJWKS,
 };

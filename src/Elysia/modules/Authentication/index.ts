@@ -1,5 +1,10 @@
-import type { AuthResult } from '@/types';
-import { extractBearerToken, extractQueryToken, upsertShadowUser, verifyJwt } from './utils';
+import type { AuthResult } from "@/types";
+import {
+  extractBearerToken,
+  extractQueryToken,
+  upsertShadowUser,
+  verifyJwt,
+} from "./utils";
 
 /*
     1. Extract token from Authorization header or access_token query parameter
@@ -8,11 +13,18 @@ import { extractBearerToken, extractQueryToken, upsertShadowUser, verifyJwt } fr
 */
 async function authenticateRequest(request: Request): Promise<AuthResult> {
   const token = extractBearerToken(request) ?? extractQueryToken(request);
+
   if (!token) {
-    return { ok: false, status: 401, code: "MISSING_TOKEN", message: "Authorization bearer token or access_token query parameter is required." };
+    return {
+      ok: false,
+      status: 401,
+      code: "MISSING_TOKEN",
+      message:
+        "Authorization bearer token or access_token query parameter is required.",
+    };
   }
 
-  const authResult = await verifyJwt(token);
+  const authResult = await verifyJwt(token, request);
   if (!authResult.ok) {
     return authResult;
   }
@@ -27,7 +39,13 @@ async function authenticateRequest(request: Request): Promise<AuthResult> {
       authIssuer: authResult.auth.claims.iss,
     });
   } catch {
-    return { ok: false, status: 500, code: "AUTH_SYNC_FAILED", message: "Failed to sync authenticated user into local shadow_users table." };
+    return {
+      ok: false,
+      status: 500,
+      code: "AUTH_SYNC_FAILED",
+      message:
+        "Failed to sync authenticated user into local shadow_users table.",
+    };
   }
 
   return authResult;

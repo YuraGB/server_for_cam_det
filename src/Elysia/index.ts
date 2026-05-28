@@ -1,21 +1,21 @@
-import Elysia from "elysia";
 import type { Serve } from "bun";
-import { SERVER_PORT, WS_ENDPOINT } from "../constants";
+import { SERVER_PORT } from "../constants";
 import type { WSData } from "../types";
-import { getIPFromRequest } from "./utils";
 import websocketConfig from "./modules/websockets/websocketConfig";
-import { routes } from "./modules/Routes";
-import {
-  authenticateWebSocket,
-  validationWebsoketConnection,
-} from "./modules/websockets";
+import createBunFetchHandler from "./utils/bunFetchHandler";
+import { elysiaHandler } from "./app";
 
 /**
- * Main Elysia application instance that serves both HTTP routes and WebSocket connections for the WebRTC signaling server.
- * The fetch handler is customized to upgrade HTTP requests to WebSocket connections when the WS_ENDPOINT is hit, while still allowing Elysia to handle regular HTTP routes defined in the Routes module.
+ * Custom fetch handler for Bun that integrates with the Elysia application.
+ * It checks if the incoming request is targeting the WebSocket endpoint (WS_ENDPOINT)
+ * and performs necessary validation and authentication before upgrading to a WebSocket connection.
+ * For all other HTTP requests, it delegates handling to the Elysia application.
  */
-const app = new Elysia({ name: "WebRTCSignalingServer" }).use(routes);
-const elysiaHandler = app.fetch;
+const bunFetchHandler = createBunFetchHandler(elysiaHandler) as (
+  this: Bun.Server<WSData>,
+  req: Request,
+  server: Bun.Server<WSData>,
+) => Bun.MaybePromise<Response | void | undefined>;
 
 /**
  * Serve options for Bun.
@@ -27,48 +27,7 @@ export default {
   port: SERVER_PORT,
 
   // Handle HTTP requests and upgrade to WebSocket when the WS_ENDPOINT is hit
-  async fetch(req, server) {
-    const url = new URL(req.url);
-
-    if (url.pathname === WS_ENDPOINT) {
-      const validationWsConnection: Response | boolean =
-        await validationWebsoketConnection(req, server);
-      if (validationWsConnection instanceof Response) {
-        return validationWsConnection;
-      }
-
-      const authResult = await authenticateWebSocket(req);
-      if (!authResult.success) {
-        return (
-          authResult.error ?? new Response("Unauthorized", { status: 401 })
-        );
-      }
-
-      if (!authResult.auth) {
-        return new Response("Authentication failed", { status: 401 });
-      }
-
-      const ip = getIPFromRequest(req, server) ?? "unknown";
-
-      if (ip === "unknown") {
-        return new Response("Unable to determine client IP", { status: 400 });
-      }
-
-      // Upgrade to WebSocket and pass the authenticated user info in the connection data
-      const success = server.upgrade(req, {
-        data: {
-          ip,
-          lastSeenAt: Date.now(),
-          auth: authResult.auth,
-        },
-      });
-
-      if (success) return;
-      return new Response("WS upgrade failed", { status: 400 });
-    }
-
-    return elysiaHandler(req);
-  },
+  fetch: bunFetchHandler,
 
   // WebSocket handlers are managed separately in ./modules/websockets/websocketConfig.ts
   websocket: websocketConfig,

@@ -1,3 +1,6 @@
+import type { elysiaHandler } from "@/Elysia/app";
+import type { Serve } from "bun";
+
 export type WSData = {
   ip: string;
   peerId?: string;
@@ -41,3 +44,6 @@ export type SignalMessage = {
   targetPeerId: string;
   [key: string]: unknown;
 };
+
+export type ElysiaFetchHandler = typeof elysiaHandler;
+export type BunFetchHandler = Serve.Options<WSData>["fetch"];

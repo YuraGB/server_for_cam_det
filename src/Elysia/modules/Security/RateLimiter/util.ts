@@ -1,5 +1,8 @@
 import Redis from "ioredis";
 const redis = new Redis(); // default localhost:6379
+redis.on("error", (err) => {
+  console.error("Redis connection error:", err);
+});
 // bucket config
 const LIMIT = 60; // requests per minute
 const BURST = 10; // extra tokens you can spend instantly

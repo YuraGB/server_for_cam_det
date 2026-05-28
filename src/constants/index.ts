@@ -1,11 +1,12 @@
+import type { createRemoteJWKSet } from "jose/jwks/remote";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const DEFAULT_SERVER_PORT = 3002;
 const DEFAULT_MAX_SIGNALING_MESSAGE_BYTES = 256 * 1024;
 const DEFAULT_LOG_LEVEL = "info";
-const DEFAULT_AUTH_JWT_ISSUER = "cam_frontend";
-const DEFAULT_AUTH_JWT_AUDIENCE = "cam_serv";
+const DEFAULT_AUTH_JWT_ISSUER = "better-auth";
+const DEFAULT_AUTH_JWT_AUDIENCE = "signaling";
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_TIMEOUT_MS = 40_000;
 
@@ -33,9 +34,9 @@ if (
   );
 }
 const AUTH_JWT_ISSUER =
-  process.env.AUTH_JWT_ISSUER?.trim() || DEFAULT_AUTH_JWT_ISSUER;
+  process.env.JWT_ISSUER?.trim() || DEFAULT_AUTH_JWT_ISSUER;
 const AUTH_JWT_AUDIENCE =
-  process.env.AUTH_JWT_AUDIENCE?.trim() || DEFAULT_AUTH_JWT_AUDIENCE;
+  process.env.JWT_AUDIENCE?.trim() || DEFAULT_AUTH_JWT_AUDIENCE;
 const MAX_SIGNALING_MESSAGE_BYTES = parsePositiveInt(
   process.env.MAX_SIGNALING_MESSAGE_BYTES,
   DEFAULT_MAX_SIGNALING_MESSAGE_BYTES,
@@ -51,6 +52,16 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",").map((origin) =>
 const ALLOWED_HTTP_METHODS = process.env.ALLOWED_HTTP_METHODS?.split(",").map(
   (method) => method.trim().toUpperCase(),
 ) || ["GET", "POST", "OPTIONS"];
+
+/**
+ * Cache for JWK Sets used in JWT verification. The keys are tenant identifiers (origins), and the values are the corresponding JWK Set fetcher functions created by createRemoteJWKSet.
+ * This cache ensures that we don't create multiple JWK Set fetchers for the same tenant, which can improve performance and reduce unnecessary network requests when verifying JWTs from the same issuer.
+ */
+const jwksCache = new Map<
+  (typeof ALLOWED_ORIGINS)[0],
+  ReturnType<typeof createRemoteJWKSet>
+>();
+
 export {
   APP_ROOT,
   SERVER_PORT,
@@ -68,4 +79,5 @@ export {
   RESERVED_MESSAGE_TYPES,
   ALLOWED_ORIGINS,
   ALLOWED_HTTP_METHODS,
+  jwksCache,
 };
