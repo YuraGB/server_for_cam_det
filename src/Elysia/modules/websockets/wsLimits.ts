@@ -1,9 +1,4 @@
-import Redis from "ioredis";
-
-const redis = new Redis();
-redis.on("error", (err) => {
-  console.error("Redis connection error:", err);
-});
+import redis from "@/Redis";
 
 const MAX_CONNECTIONS_PER_IP = 10;
 
@@ -55,14 +50,4 @@ export async function disconnect(ip: string): Promise<void> {
   } catch (error) {
     console.error("Redis error in disconnect:", error);
   }
-}
-
-/**
- * Refresh TTL for active sockets.
- * Call this on pong / heartbeat.
- */
-export async function refreshConnection(ip: string): Promise<void> {
-  const key = getKey(ip);
-
-  await redis.expire(key, CONNECTION_TTL);
 }

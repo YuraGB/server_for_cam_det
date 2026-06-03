@@ -1,10 +1,12 @@
 import type { BunFetchHandler, ElysiaFetchHandler } from "@/types";
-import { WS_ENDPOINT } from "@/constants";
+import { SERVICE_JWT_ISSUERS, WS_ENDPOINT } from "@/constants";
 import {
   authenticateWebSocket,
   validationWebsoketConnection,
 } from "../modules/websockets";
 import { getIPFromRequest } from ".";
+import { hasPermissionsHandler } from "./hasPermissions";
+import { PERMISSIONS } from "@/constants/permissions";
 
 export default function createBunFetchHandler(
   fetchHandler: ElysiaFetchHandler,
@@ -30,14 +32,13 @@ export default function createBunFetchHandler(
        * This ensures that only authenticated users can establish WebSocket connections to the signaling server.
        */
       const authResult = await authenticateWebSocket(req);
-
       if (!authResult.success) {
         return (
           authResult.error ?? new Response("Unauthorized", { status: 401 })
         );
       }
 
-      if (!authResult.auth) {
+      if (!authResult.auth || !authResult.auth.userId) {
         return new Response("Authentication failed", { status: 401 });
       }
 
@@ -45,6 +46,20 @@ export default function createBunFetchHandler(
 
       if (ip === "unknown") {
         return new Response("Unable to determine client IP", { status: 400 });
+      }
+
+      // We are skipping permission check for trusted issuers
+      // as they are internal services which are not supposed to be used by external users.
+      // If needed we can add more fine grained permission check later.
+      if (authResult.auth.claims.issuer !== SERVICE_JWT_ISSUERS) {
+        const hasPermissions = await hasPermissionsHandler(
+          authResult.auth.userId,
+          [PERMISSIONS.STREAM_READ, PERMISSIONS.CAMERA_READ],
+        );
+
+        if (!hasPermissions) {
+          return new Response("Insufficient permissions", { status: 403 });
+        }
       }
 
       // Upgrade to WebSocket and pass the authenticated user info in the connection data

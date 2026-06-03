@@ -7,6 +7,7 @@ const DEFAULT_MAX_SIGNALING_MESSAGE_BYTES = 256 * 1024;
 const DEFAULT_LOG_LEVEL = "info";
 const DEFAULT_AUTH_JWT_ISSUER = "better-auth";
 const DEFAULT_AUTH_JWT_AUDIENCE = "signaling";
+const DEFAULT_SERVICE_JWT_ISSUERS = ["camera-cv-service"];
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_TIMEOUT_MS = 40_000;
 
@@ -37,6 +38,10 @@ const AUTH_JWT_ISSUER =
   process.env.JWT_ISSUER?.trim() || DEFAULT_AUTH_JWT_ISSUER;
 const AUTH_JWT_AUDIENCE =
   process.env.JWT_AUDIENCE?.trim() || DEFAULT_AUTH_JWT_AUDIENCE;
+const SERVICE_JWT_ISSUERS = (
+  process.env.SERVICE_JWT_ISSUERS?.split(",").map((issuer) => issuer.trim()) ||
+  DEFAULT_SERVICE_JWT_ISSUERS
+).filter((issuer) => issuer.length > 0);
 const MAX_SIGNALING_MESSAGE_BYTES = parsePositiveInt(
   process.env.MAX_SIGNALING_MESSAGE_BYTES,
   DEFAULT_MAX_SIGNALING_MESSAGE_BYTES,
@@ -47,7 +52,7 @@ const RESERVED_MESSAGE_TYPES = new Set(["register", "ping", "pong"]);
 
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",").map((origin) =>
   origin.trim(),
-) || ["http://localhost:3000"];
+) || ["http://localhost:3000", "http://localhost:3001"];
 
 const ALLOWED_HTTP_METHODS = process.env.ALLOWED_HTTP_METHODS?.split(",").map(
   (method) => method.trim().toUpperCase(),
@@ -63,15 +68,14 @@ const jwksCache = new Map<
 >();
 
 export {
-  APP_ROOT,
   SERVER_PORT,
   WS_ENDPOINT,
   HEALTH_ENDPOINT,
   APP_NAME,
-  LOG_LEVEL,
   AUTH_JWT_SECRET,
   AUTH_JWT_ISSUER,
   AUTH_JWT_AUDIENCE,
+  SERVICE_JWT_ISSUERS,
   MAX_SIGNALING_MESSAGE_BYTES,
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_TIMEOUT_MS,

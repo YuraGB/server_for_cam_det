@@ -16,6 +16,7 @@ function shutdown(signal: string): void {
   console.log(`[${APP_NAME}] received ${signal}, shutting down...`);
   stopHeartbeatMonitor();
   server.stop(true);
+  process.exit(0)
 }
 
 process.on("SIGINT", () => shutdown("SIGINT"));

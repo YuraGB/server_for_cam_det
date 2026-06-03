@@ -6,6 +6,7 @@ import { clients, getIPFromRequest, isTrustedOrigin } from "../../utils";
 import type { AuthContext, WSData } from "../../../types";
 import { authenticateRequest } from "../Authentication";
 import { canConnect } from "./wsLimits";
+import { upsertShadowUser } from "../Authentication/utils";
 
 function startHeartbeatMonitor(): () => void {
   const timer = setInterval(() => {
@@ -47,15 +48,22 @@ async function validationWebsoketConnection(
   request: Request,
   server: Bun.Server<unknown>,
 ): Promise<Response | boolean> {
-  // Validate the Origin header to prevent unauthorized cross-origin WebSocket connections
-  const isValidOrigin = isTrustedOrigin(request);
-  if (!isValidOrigin) {
-    return new Response("Forbidden", { status: 403 });
+  const origin = request.headers.get("Origin");
+
+  /**
+   * Origin can be absent for ex.:
+   * Docker service on same maching will try to connect without origin
+   */
+  if (origin) {
+    // Validate the Origin header to prevent unauthorized cross-origin WebSocket connections
+    const isValidOrigin = isTrustedOrigin(request);
+    if (!isValidOrigin) {
+      return new Response("Forbidden", { status: 403 });
+    }
   }
 
   const ip = getIPFromRequest(request, server) ?? "unknown";
   const isAllowed = await canConnect(ip);
-
   if (!isAllowed) {
     return new Response("Too Many Requests", { status: 429 });
   }
@@ -74,6 +82,7 @@ async function authenticateWebSocket(
         error: new Response("Unauthorized", { status: 401 }),
       };
     }
+
     return { success: true, auth: authResult.auth };
   } catch {
     return {

@@ -1,26 +1,31 @@
 import { createHmac } from "crypto";
-import { AUTH_JWT_AUDIENCE, AUTH_JWT_ISSUER } from "@/constants";
+import {
+  AUTH_JWT_AUDIENCE,
+  AUTH_JWT_ISSUER,
+  AUTH_JWT_SECRET,
+  SERVICE_JWT_ISSUERS,
+} from "@/constants";
 import type { AuthClaims, AuthContext, AuthResult } from "@/types";
-import { upsertShadowUser } from "../../ShallowUser/service";
+import { upsertShadowUser } from "../../Routes/User/Service";
 import { jwtVerify } from "jose";
 import { getJWKS } from "@/Elysia/utils";
-
-function decodeBase64Url(value: string): string {
+function decodeBase64UrlToBuffer(value: string): Buffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+
   const padded = normalized.padEnd(
     normalized.length + ((4 - (normalized.length % 4)) % 4),
     "=",
   );
-  return Buffer.from(padded, "base64").toString("utf8");
+
+  return Buffer.from(padded, "base64");
+}
+
+function decodeBase64Url(value: string): string {
+  return decodeBase64UrlToBuffer(value).toString("utf8");
 }
 
 function decodeBase64UrlBytes(value: string): Uint8Array {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    "=",
-  );
-  return Buffer.from(padded, "base64");
+  return decodeBase64UrlToBuffer(value);
 }
 
 function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -46,7 +51,8 @@ function extractBearerToken(request: Request): string | null {
 
 function extractQueryToken(request: Request): string | null {
   const url = new URL(request.url);
-  const token = url.searchParams.get("token");
+  const token =
+    url.searchParams.get("token") ?? url.searchParams.get("access_token");
   return token?.trim() || null;
 }
 
@@ -76,7 +82,7 @@ function toAuthContext(claims: AuthClaims): AuthContext {
   };
 }
 
-function validateClaims(claims: unknown): AuthResult {
+function validateClaims(claims: unknown, allowedIssuers: string[]): AuthResult {
   if (!claims || typeof claims !== "object") {
     return {
       ok: false,
@@ -96,7 +102,7 @@ function validateClaims(claims: unknown): AuthResult {
     };
   }
 
-  if (typedClaims.iss !== AUTH_JWT_ISSUER) {
+  if (!typedClaims.iss || !allowedIssuers.includes(typedClaims.iss)) {
     return {
       ok: false,
       status: 401,
@@ -108,12 +114,6 @@ function validateClaims(claims: unknown): AuthResult {
   const audiences = Array.isArray(typedClaims.aud)
     ? typedClaims.aud
     : [typedClaims.aud];
-  console.log(
-    !audiences.includes(AUTH_JWT_AUDIENCE),
-    typedClaims.aud,
-    AUTH_JWT_AUDIENCE,
-    AUTH_JWT_ISSUER,
-  );
   if (!audiences.includes(AUTH_JWT_AUDIENCE)) {
     return {
       ok: false,
@@ -145,18 +145,93 @@ function validateClaims(claims: unknown): AuthResult {
   return { ok: true, auth: toAuthContext(typedClaims as AuthClaims) };
 }
 
-async function verifyJwt(token: string, request: Request): Promise<AuthResult> {
+function verifyHs256Jwt(token: string): AuthResult {
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    return {
+      ok: false,
+      status: 401,
+      code: "INVALID_TOKEN",
+      message: "JWT token format is invalid.",
+    };
+  }
+
+  const [encodedHeader, encodedPayload, encodedSignature] = parts;
+  if (!encodedHeader || !encodedPayload || !encodedSignature) {
+    return {
+      ok: false,
+      status: 401,
+      code: "INVALID_TOKEN",
+      message: "JWT token format is invalid.",
+    };
+  }
+
+  let header: unknown;
+  let payload: unknown;
+  try {
+    header = JSON.parse(decodeBase64Url(encodedHeader));
+    payload = JSON.parse(decodeBase64Url(encodedPayload));
+  } catch {
+    return {
+      ok: false,
+      status: 401,
+      code: "INVALID_TOKEN",
+      message: "JWT token payload is invalid.",
+    };
+  }
+
+  if (
+    !header ||
+    typeof header !== "object" ||
+    (header as { alg?: unknown }).alg !== "HS256"
+  ) {
+    return {
+      ok: false,
+      status: 401,
+      code: "INVALID_TOKEN",
+      message: "JWT algorithm is not allowed.",
+    };
+  }
+
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+  const expectedSignature = createHmac("sha256", AUTH_JWT_SECRET)
+    .update(unsignedToken)
+    .digest();
+  const signature = decodeBase64UrlBytes(encodedSignature);
+  if (!timingSafeEqual(signature, expectedSignature)) {
+    return {
+      ok: false,
+      status: 401,
+      code: "INVALID_TOKEN",
+      message: "JWT signature is invalid.",
+    };
+  }
+
+  return validateClaims(payload, SERVICE_JWT_ISSUERS);
+}
+
+async function verifyBetterAuthJwt(
+  token: string,
+  request: Request,
+): Promise<AuthResult> {
   const originClient = new URL(request.headers.get("origin") || request.url)
     .origin;
   const JWKS = getJWKS(originClient);
-  try {
-    const { payload } = await jwtVerify(token, JWKS, {
-      issuer: "better-auth",
-      audience: "signaling",
-    });
+  const { payload } = await jwtVerify(token, JWKS, {
+    issuer: AUTH_JWT_ISSUER,
+    audience: AUTH_JWT_AUDIENCE,
+  });
 
-    return validateClaims(payload);
-  } catch (err) {
+  return validateClaims(payload, [AUTH_JWT_ISSUER]);
+}
+
+async function verifyJwt(token: string, request: Request): Promise<AuthResult> {
+  const serviceResult = verifyHs256Jwt(token);
+  if (serviceResult.ok) return serviceResult;
+
+  try {
+    return await verifyBetterAuthJwt(token, request);
+  } catch {
     return {
       ok: false,
       status: 401,
@@ -166,13 +241,4 @@ async function verifyJwt(token: string, request: Request): Promise<AuthResult> {
   }
 }
 
-export {
-  extractBearerToken,
-  extractQueryToken,
-  verifyJwt,
-  toAuthContext,
-  upsertShadowUser,
-  timingSafeEqual,
-  decodeBase64Url,
-  decodeBase64UrlBytes,
-};
+export { extractBearerToken, extractQueryToken, verifyJwt, upsertShadowUser };

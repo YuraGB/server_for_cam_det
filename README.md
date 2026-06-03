@@ -71,7 +71,7 @@ The target peer receives the same payload plus sender `peerId`:
 
 ## Authentication
 
-`cam_serv` does not initialize `better-auth` directly. It expects a short-lived JWT access token from the frontend auth server and verifies it locally during WebSocket upgrade.
+`cam_serv` does not initialize `better-auth` directly. It accepts short-lived JWT access tokens from the frontend auth server via JWKS and service JWTs signed with the shared `AUTH_JWT_SECRET`.
 
 Send the token as either:
 
@@ -82,13 +82,13 @@ Authorization: Bearer <jwt>
 or for browser WebSocket clients:
 
 ```text
-ws://host:3002/ws?access_token=<jwt>
+ws://host:3002/ws?token=<jwt>
 ```
 
 ⚠️ **Security Warning**: Query parameter is a fallback only.
 - In production, use **`wss://`** (encrypted) exclusively
 - Use short-lived tokens (low TTL)
-- Ensure reverse proxies, CDNs, and monitoring services do not log/cache `access_token`
+- Ensure reverse proxies, CDNs, and monitoring services do not log/cache `token` or `access_token`
 - Prefer `Authorization` header when possible
 
 ## Security Features
@@ -107,7 +107,8 @@ Environment variables:
 - `LOG_LEVEL` default `info`
 - `MAX_SIGNALING_MESSAGE_BYTES` default `262144`
 - `AUTH_JWT_SECRET` shared HMAC secret for service tokens
-- `AUTH_JWT_ISSUER` default `cam_frontend`
-- `AUTH_JWT_AUDIENCE` default `cam_serv`
+- `JWT_ISSUER` better-auth issuer, default `better-auth`
+- `JWT_AUDIENCE` shared audience, default `signaling`
+- `SERVICE_JWT_ISSUERS` comma-separated HS256 service issuers, default `camera-cv-service`
 
 See [.env.example](/D:/Projects/cam_serv/.env.example).
