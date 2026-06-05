@@ -2,6 +2,33 @@ import db, { shadowUsers } from "@/db/drizzle";
 import redis from "@/Redis";
 import { eq } from "drizzle-orm";
 
+const PERMISSIONS_TTL_SECONDS = 3600;
+
+const permissionsKey = (userId: string) => `user:${userId}:permissions`;
+
+const normalizePermissions = (permissions: unknown): string[] =>
+  Array.isArray(permissions)
+    ? [
+        ...new Set(
+          permissions
+            .map((permission) =>
+              typeof permission === "string" ? permission.trim() : "",
+            )
+            .filter((permission) => permission.length > 0),
+        ),
+      ]
+    : [];
+
+const parsePermissions = (permissionsJson: string | null | undefined) => {
+  if (!permissionsJson) return [];
+
+  try {
+    return normalizePermissions(JSON.parse(permissionsJson));
+  } catch {
+    return [];
+  }
+};
+
 export async function upsertShadowUser(input: {
   id: string;
   name: string;
@@ -9,11 +36,14 @@ export async function upsertShadowUser(input: {
   role?: string;
   emailVerified?: boolean;
   permissionsJson: string[];
-  image?: string;
+  image?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }): Promise<void> {
   const now = new Date();
+  const permissionsJson = JSON.stringify(
+    normalizePermissions(input.permissionsJson),
+  );
 
   try {
     await db
@@ -24,7 +54,7 @@ export async function upsertShadowUser(input: {
           authIssuer: input.name,
           email: input.email,
           role: input.role,
-          permissionsJson: JSON.stringify(input.permissionsJson),
+          permissionsJson,
           lastLoginAt: now,
           createdAt: input.createdAt ? new Date(input.createdAt) : now,
           updatedAt: input.updatedAt ? new Date(input.updatedAt) : now,
@@ -36,7 +66,7 @@ export async function upsertShadowUser(input: {
           authIssuer: input.name,
           email: input.email,
           role: input.role,
-          permissionsJson: JSON.stringify(input.permissionsJson),
+          permissionsJson,
           createdAt: input.createdAt ? new Date(input.createdAt) : now,
           updatedAt: input.updatedAt ? new Date(input.updatedAt) : now,
         },
@@ -47,30 +77,30 @@ export async function upsertShadowUser(input: {
   }
 }
 
-// From Redis/Cache
-export const getPermissinsFromRedis = async (userId: string) => {
+export const getPermissionsFromRedis = async (userId: string) => {
   try {
-    const permissionsJson = await redis.get(`user:${userId}:permissions`);
+    const permissionsJson = await redis.get(permissionsKey(userId));
 
-    if (!permissionsJson) {
-      return [];
-    }
-    return JSON.parse(permissionsJson);
+    if (permissionsJson === null) return null;
+
+    return parsePermissions(permissionsJson);
   } catch (error) {
     console.error("Error fetching user permissions from Redis:", error);
     throw new Error("Failed to fetch user permissions from Redis");
   }
 };
 
+export const getPermissinsFromRedis = getPermissionsFromRedis;
+
 export const setPermissionsToRedis = async (
   userId: string,
   permissions: string[],
-  ttlSeconds = 3600,
+  ttlSeconds = PERMISSIONS_TTL_SECONDS,
 ) => {
   try {
     await redis.set(
-      `user:${userId}:permissions`,
-      JSON.stringify(permissions),
+      permissionsKey(userId),
+      JSON.stringify(normalizePermissions(permissions)),
       "EX",
       ttlSeconds,
     );
@@ -80,7 +110,6 @@ export const setPermissionsToRedis = async (
   }
 };
 
-// From DB
 export const getPermissionsFromDB = async (userId: string) => {
   try {
     const user = await db
@@ -95,7 +124,7 @@ export const getPermissionsFromDB = async (userId: string) => {
       return [];
     }
 
-    return JSON.parse(user?.[0]?.permissionsJson ?? "[]");
+    return parsePermissions(user?.[0]?.permissionsJson);
   } catch (error) {
     console.error("Error fetching user permissions:", error);
     throw new Error("Failed to fetch user permissions");
@@ -103,17 +132,14 @@ export const getPermissionsFromDB = async (userId: string) => {
 };
 
 export const getUserPermissions = async (userId: string) => {
-  // 1. try cache
-  const cached = await getPermissinsFromRedis(userId);
+  const cached = await getPermissionsFromRedis(userId);
 
-  if (cached?.length) {
+  if (cached !== null) {
     return cached;
   }
 
-  // 2. fallback to DB
   const dbPermissions = await getPermissionsFromDB(userId);
 
-  // 3. refill cache
   await setPermissionsToRedis(userId, dbPermissions);
 
   return dbPermissions;

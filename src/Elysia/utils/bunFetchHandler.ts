@@ -8,6 +8,17 @@ import { getIPFromRequest } from ".";
 import { hasPermissionsHandler } from "./hasPermissions";
 import { PERMISSIONS } from "@/constants/permissions";
 
+const hasTokenPermission = (
+  auth: NonNullable<Awaited<ReturnType<typeof authenticateWebSocket>>["auth"]>,
+  permission: string,
+) => auth.permissions.includes(permission);
+
+const isServiceIssuer = (
+  auth: NonNullable<Awaited<ReturnType<typeof authenticateWebSocket>>["auth"]>,
+) =>
+  typeof auth.claims.iss === "string" &&
+  SERVICE_JWT_ISSUERS.includes(auth.claims.iss);
+
 export default function createBunFetchHandler(
   fetchHandler: ElysiaFetchHandler,
 ): BunFetchHandler {
@@ -15,8 +26,10 @@ export default function createBunFetchHandler(
     const url = new URL(req.url);
 
     if (url.pathname === WS_ENDPOINT) {
-      const validationWsConnection: Response | boolean =
-        await validationWebsoketConnection(req, server);
+      const validationWsConnection = await validationWebsoketConnection(
+        req,
+        server,
+      );
       if (validationWsConnection instanceof Response) {
         console.warn(
           "WebSocket connection rejected:",
@@ -26,11 +39,6 @@ export default function createBunFetchHandler(
         return validationWsConnection;
       }
 
-      /**
-       * Authenticate the WebSocket connection using the same JWT-based authentication as HTTP requests.
-       * The authenticateWebSocket function will extract the token, verify it, and return the authenticated user info if successful.
-       * This ensures that only authenticated users can establish WebSocket connections to the signaling server.
-       */
       const authResult = await authenticateWebSocket(req);
       if (!authResult.success) {
         return (
@@ -48,21 +56,22 @@ export default function createBunFetchHandler(
         return new Response("Unable to determine client IP", { status: 400 });
       }
 
-      // We are skipping permission check for trusted issuers
-      // as they are internal services which are not supposed to be used by external users.
-      // If needed we can add more fine grained permission check later.
-      if (authResult.auth.claims.issuer !== SERVICE_JWT_ISSUERS) {
+      if (isServiceIssuer(authResult.auth)) {
+        if (
+          !hasTokenPermission(authResult.auth, PERMISSIONS.SIGNALING_CONNECT)
+        ) {
+          return new Response("Insufficient permissions", { status: 403 });
+        }
+      } else {
         const hasPermissions = await hasPermissionsHandler(
           authResult.auth.userId,
-          [PERMISSIONS.STREAM_READ, PERMISSIONS.CAMERA_READ],
+          [PERMISSIONS.STREAM_READ],
         );
-
         if (!hasPermissions) {
           return new Response("Insufficient permissions", { status: 403 });
         }
       }
 
-      // Upgrade to WebSocket and pass the authenticated user info in the connection data
       const success = server.upgrade(req, {
         data: {
           ip,

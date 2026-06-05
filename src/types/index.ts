@@ -1,3 +1,4 @@
+import type { ALLOWED_ORIGINS } from "@/constants";
 import type { elysiaHandler } from "@/Elysia/app";
 import type { Serve } from "bun";
 
@@ -47,3 +48,5 @@ export type SignalMessage = {
 
 export type ElysiaFetchHandler = typeof elysiaHandler;
 export type BunFetchHandler = Serve.Options<WSData>["fetch"];
+
+export type TAllowedOrigin = (typeof ALLOWED_ORIGINS)[number];

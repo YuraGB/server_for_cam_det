@@ -1,7 +1,4 @@
-import {
-  getPermissinsFromRedis,
-  getUserPermissions,
-} from "../modules/Routes/User/Service";
+import { getUserPermissions } from "../modules/Routes/User/Service";
 
 export const hasPermissionsHandler = async (
   userId: string,

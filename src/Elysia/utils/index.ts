@@ -152,11 +152,16 @@ function handleForward(
   }
 }
 
+// validation from request
 const isTrustedOrigin = (request: Request): boolean => {
   const origin = request.headers.get("Origin");
   if (!origin) return false;
   return ALLOWED_ORIGINS.includes(origin);
 };
+
+// validation from paramether
+const isAllowedOrigin = (origin: string): boolean =>
+  ALLOWED_ORIGINS.includes(origin);
 
 const getIPFromRequest = (
   request: Request,
@@ -205,4 +210,5 @@ export {
   isTrustedOrigin,
   getIPFromRequest,
   getJWKS,
+  isAllowedOrigin,
 };

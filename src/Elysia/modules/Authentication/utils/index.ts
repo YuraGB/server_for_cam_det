@@ -8,7 +8,26 @@ import {
 import type { AuthClaims, AuthContext, AuthResult } from "@/types";
 import { upsertShadowUser } from "../../Routes/User/Service";
 import { jwtVerify } from "jose";
-import { getJWKS } from "@/Elysia/utils";
+import { getJWKS, isAllowedOrigin } from "@/Elysia/utils";
+
+const unauthorized = (code: string, message: string): AuthResult => ({
+  ok: false,
+  status: 401,
+  code,
+  message,
+});
+
+const getStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? [
+        ...new Set(
+          value
+            .map((item) => (typeof item === "string" ? item.trim() : ""))
+            .filter((item) => item.length > 0),
+        ),
+      ]
+    : [];
+
 function decodeBase64UrlToBuffer(value: string): Buffer {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
 
@@ -57,89 +76,53 @@ function extractQueryToken(request: Request): string | null {
 }
 
 function toAuthContext(claims: AuthClaims): AuthContext {
-  const roles = Array.isArray(claims.roles)
-    ? claims.roles.filter(
-        (role): role is string => typeof role === "string" && role.length > 0,
-      )
-    : claims.role
-      ? [claims.role]
-      : [];
-
-  const permissions = Array.isArray(claims.permissions)
-    ? claims.permissions.filter(
-        (permission): permission is string =>
-          typeof permission === "string" && permission.length > 0,
-      )
-    : [];
+  const role = typeof claims.role === "string" ? claims.role.trim() : "";
+  const roles = getStringArray(claims.roles);
+  const normalizedRoles =
+    role.length > 0 ? [...new Set([role, ...roles])] : roles;
 
   return {
     userId: claims.sub,
     email: typeof claims.email === "string" ? claims.email : undefined,
-    role: typeof claims.role === "string" ? claims.role : roles[0],
-    roles,
-    permissions,
+    role: role || normalizedRoles[0],
+    roles: normalizedRoles,
+    permissions: getStringArray(claims.permissions),
     claims,
   };
 }
 
 function validateClaims(claims: unknown, allowedIssuers: string[]): AuthResult {
   if (!claims || typeof claims !== "object") {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_CLAIMS",
-      message: "JWT claims payload is invalid.",
-    };
+    return unauthorized("INVALID_CLAIMS", "JWT claims payload is invalid.");
   }
 
   const typedClaims = claims as Partial<AuthClaims>;
   if (typeof typedClaims.sub !== "string" || typedClaims.sub.length === 0) {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_SUBJECT",
-      message: "JWT subject is missing.",
-    };
+    return unauthorized("INVALID_SUBJECT", "JWT subject is missing.");
   }
 
   if (!typedClaims.iss || !allowedIssuers.includes(typedClaims.iss)) {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_ISSUER",
-      message: "JWT issuer is not allowed.",
-    };
+    return unauthorized("INVALID_ISSUER", "JWT issuer is not allowed.");
   }
 
-  const audiences = Array.isArray(typedClaims.aud)
-    ? typedClaims.aud
-    : [typedClaims.aud];
-  if (!audiences.includes(AUTH_JWT_AUDIENCE)) {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_AUDIENCE",
-      message: "JWT audience is not allowed.",
-    };
+  const audiences = getStringArray(
+    Array.isArray(typedClaims.aud) ? typedClaims.aud : [typedClaims.aud],
+  );
+  const hasAllowedAudience = audiences.some(
+    (audience) => audience === AUTH_JWT_AUDIENCE || isAllowedOrigin(audience),
+  );
+
+  if (!hasAllowedAudience) {
+    return unauthorized("INVALID_AUDIENCE", "JWT audience is not allowed.");
   }
 
   if (typeof typedClaims.exp !== "number") {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_EXP",
-      message: "JWT expiration is missing.",
-    };
+    return unauthorized("INVALID_EXP", "JWT expiration is missing.");
   }
 
   const now = Math.floor(Date.now() / 1000);
   if (typedClaims.exp <= now) {
-    return {
-      ok: false,
-      status: 401,
-      code: "TOKEN_EXPIRED",
-      message: "JWT token is expired.",
-    };
+    return unauthorized("TOKEN_EXPIRED", "JWT token is expired.");
   }
 
   return { ok: true, auth: toAuthContext(typedClaims as AuthClaims) };
@@ -148,22 +131,12 @@ function validateClaims(claims: unknown, allowedIssuers: string[]): AuthResult {
 function verifyHs256Jwt(token: string): AuthResult {
   const parts = token.split(".");
   if (parts.length !== 3) {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_TOKEN",
-      message: "JWT token format is invalid.",
-    };
+    return unauthorized("INVALID_TOKEN", "JWT token format is invalid.");
   }
 
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
   if (!encodedHeader || !encodedPayload || !encodedSignature) {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_TOKEN",
-      message: "JWT token format is invalid.",
-    };
+    return unauthorized("INVALID_TOKEN", "JWT token format is invalid.");
   }
 
   let header: unknown;
@@ -172,12 +145,7 @@ function verifyHs256Jwt(token: string): AuthResult {
     header = JSON.parse(decodeBase64Url(encodedHeader));
     payload = JSON.parse(decodeBase64Url(encodedPayload));
   } catch {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_TOKEN",
-      message: "JWT token payload is invalid.",
-    };
+    return unauthorized("INVALID_TOKEN", "JWT token payload is invalid.");
   }
 
   if (
@@ -185,12 +153,7 @@ function verifyHs256Jwt(token: string): AuthResult {
     typeof header !== "object" ||
     (header as { alg?: unknown }).alg !== "HS256"
   ) {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_TOKEN",
-      message: "JWT algorithm is not allowed.",
-    };
+    return unauthorized("INVALID_TOKEN", "JWT algorithm is not allowed.");
   }
 
   const unsignedToken = `${encodedHeader}.${encodedPayload}`;
@@ -199,30 +162,43 @@ function verifyHs256Jwt(token: string): AuthResult {
     .digest();
   const signature = decodeBase64UrlBytes(encodedSignature);
   if (!timingSafeEqual(signature, expectedSignature)) {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_TOKEN",
-      message: "JWT signature is invalid.",
-    };
+    return unauthorized("INVALID_TOKEN", "JWT signature is invalid.");
   }
-
   return validateClaims(payload, SERVICE_JWT_ISSUERS);
+}
+
+function getBetterAuthOrigin(request: Request): string | null {
+  const origin = request.headers.get("origin");
+  if (origin && isAllowedOrigin(origin)) return origin;
+
+  const authOrigin = request.headers.get("x-auth-origin");
+  if (!origin && authOrigin && isAllowedOrigin(authOrigin)) return authOrigin;
+
+  return null;
 }
 
 async function verifyBetterAuthJwt(
   token: string,
   request: Request,
 ): Promise<AuthResult> {
-  const originClient = new URL(request.headers.get("origin") || request.url)
-    .origin;
-  const JWKS = getJWKS(originClient);
-  const { payload } = await jwtVerify(token, JWKS, {
-    issuer: AUTH_JWT_ISSUER,
-    audience: AUTH_JWT_AUDIENCE,
-  });
+  const origin = getBetterAuthOrigin(request);
+  if (!origin) {
+    return unauthorized("INVALID_ORIGIN", "JWT origin is not allowed.");
+  }
 
-  return validateClaims(payload, [AUTH_JWT_ISSUER]);
+  const isRuntimeToken = !request.headers.get("origin");
+  const issuer = isRuntimeToken ? origin : AUTH_JWT_ISSUER;
+  const audience = isRuntimeToken ? origin : AUTH_JWT_AUDIENCE;
+  const allowedJWTIssuers = isRuntimeToken
+    ? [AUTH_JWT_ISSUER, origin]
+    : [AUTH_JWT_ISSUER];
+  const JWKS = getJWKS(new URL(origin).origin);
+
+  const { payload } = await jwtVerify(token, JWKS, {
+    issuer,
+    audience,
+  });
+  return validateClaims(payload, allowedJWTIssuers);
 }
 
 async function verifyJwt(token: string, request: Request): Promise<AuthResult> {
@@ -232,12 +208,7 @@ async function verifyJwt(token: string, request: Request): Promise<AuthResult> {
   try {
     return await verifyBetterAuthJwt(token, request);
   } catch {
-    return {
-      ok: false,
-      status: 401,
-      code: "INVALID_TOKEN",
-      message: "JWT verification failed",
-    };
+    return unauthorized("INVALID_TOKEN", "JWT verification failed");
   }
 }
 

@@ -9,7 +9,6 @@ export const userRoutes = new Elysia({
 })
   .derive(async ({ request, status }) => {
     const authResult = await authenticateRequest(request);
-
     if (!authResult.ok) {
       return status(401);
     }
@@ -18,29 +17,30 @@ export const userRoutes = new Elysia({
   })
   .post(
     "/sync",
-    ({ body, userId, status }) => {
-      upsertShadowUser({
+    async ({ body, userId, status }) => {
+      await upsertShadowUser({
         ...body,
-        id: userId,
-        name: body.name ?? "",
       }).catch((error) => {
         console.error("Error upserting shadow user:", error);
       });
 
-      setPermissionsToRedis(userId, body.permissionsJson).catch((error) => {
-        console.error("Error setting permissions to Redis:", error);
-      });
+      await setPermissionsToRedis(userId, body.permissionsJson).catch(
+        (error) => {
+          console.error("Error setting permissions to Redis:", error);
+        },
+      );
 
       return status(200);
     },
     {
       body: z.object({
-        email: z.string().email(),
-        name: z.string().optional(),
+        id: z.string(),
+        email: z.email(),
+        name: z.string(),
         role: z.string().optional(),
         permissionsJson: z.array(z.string()),
         emailVerified: z.boolean().optional(),
-        image: z.string().optional(),
+        image: z.string().nullable().optional(),
         createdAt: z.string().optional(),
         updatedAt: z.string().optional(),
       }),
