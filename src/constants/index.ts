@@ -2,6 +2,8 @@ import type { createRemoteJWKSet } from "jose/jwks/remote";
 import path from "path";
 import { fileURLToPath } from "url";
 
+const isDev = process.env.NODE_ENV || "development";
+const COOKiE_SECRET = process.env.COOKiE_SECRET || "secret";
 const DEFAULT_SERVER_PORT = 3002;
 const DEFAULT_MAX_SIGNALING_MESSAGE_BYTES = 256 * 1024;
 const DEFAULT_LOG_LEVEL = "info";
@@ -97,4 +99,6 @@ export {
   ALLOWED_ORIGINS,
   ALLOWED_HTTP_METHODS,
   jwksCache,
+  isDev,
+  COOKiE_SECRET,
 };

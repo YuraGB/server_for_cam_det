@@ -12,7 +12,7 @@ import { clients } from "@/Elysia/utils";
 import { ip } from "elysia-ip";
 import { userRoutes } from "./User";
 
-export const routes = new Elysia({ name: "Routes" })
+export const routes = new Elysia({ name: "Routes", cookie: {} })
   .use(rateLimiter)
   .use(securityHeaders)
   .use(serverTiming()) // by @default enable if NODE_ENV !== 'production'
