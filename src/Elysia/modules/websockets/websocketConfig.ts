@@ -13,7 +13,7 @@ import { disconnect } from "./wsLimits";
 const websocketConfig = {
   open(ws: Bun.ServerWebSocket<WSData>) {
     ws.data.lastSeenAt = Date.now();
-    sendJson(ws, { type: "connected" });
+    sendJson(ws, { type: "connected", peerId: ws.data.peerId ?? null });
   },
 
   message(
@@ -77,11 +77,17 @@ const websocketConfig = {
       return;
     }
 
-    if (
-      typedData.type === "register" &&
-      isNonEmptyString(typedData.peerId, MAX_PEER_ID_LENGTH)
-    ) {
-      handleRegister(ws, typedData as RegisterMessage);
+    if (typedData.type === "register") {
+      if (isNonEmptyString(typedData.peerId, MAX_PEER_ID_LENGTH)) {
+        handleRegister(ws, typedData as RegisterMessage);
+        return;
+      }
+
+      sendJson(ws, {
+        type: "error",
+        code: "INVALID_PEER_ID",
+        message: "peerId is required.",
+      });
       return;
     }
 

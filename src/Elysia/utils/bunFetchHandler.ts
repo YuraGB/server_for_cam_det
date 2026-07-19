@@ -56,6 +56,8 @@ export default function createBunFetchHandler(
         return new Response("Unable to determine client IP", { status: 400 });
       }
 
+      // Check permissions based on the type of issuer
+      // Service tokens have specific permissions, while user tokens require a permission check
       if (isServiceIssuer(authResult.auth)) {
         if (
           !hasTokenPermission(authResult.auth, PERMISSIONS.SIGNALING_CONNECT)

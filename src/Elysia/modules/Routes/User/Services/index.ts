@@ -1,33 +1,14 @@
 import db, { shadowUsers } from "@/db/drizzle";
+import {
+  getPermissionsFromRedis,
+  setPermissionsToRedis,
+} from "@/Elysia/modules/infrastructure/cache/cache.service";
+import {
+  normalizePermissions,
+  parsePermissions,
+} from "@/Elysia/utils/formatPermissions";
 import redis from "@/Redis";
 import { eq } from "drizzle-orm";
-
-const PERMISSIONS_TTL_SECONDS = 3600;
-
-const permissionsKey = (userId: string) => `user:${userId}:permissions`;
-
-const normalizePermissions = (permissions: unknown): string[] =>
-  Array.isArray(permissions)
-    ? [
-        ...new Set(
-          permissions
-            .map((permission) =>
-              typeof permission === "string" ? permission.trim() : "",
-            )
-            .filter((permission) => permission.length > 0),
-        ),
-      ]
-    : [];
-
-const parsePermissions = (permissionsJson: string | null | undefined) => {
-  if (!permissionsJson) return [];
-
-  try {
-    return normalizePermissions(JSON.parse(permissionsJson));
-  } catch {
-    return [];
-  }
-};
 
 export async function upsertShadowUser(input: {
   id: string;
@@ -76,39 +57,6 @@ export async function upsertShadowUser(input: {
     throw error;
   }
 }
-
-export const getPermissionsFromRedis = async (userId: string) => {
-  try {
-    const permissionsJson = await redis.get(permissionsKey(userId));
-
-    if (permissionsJson === null) return null;
-
-    return parsePermissions(permissionsJson);
-  } catch (error) {
-    console.error("Error fetching user permissions from Redis:", error);
-    throw new Error("Failed to fetch user permissions from Redis");
-  }
-};
-
-export const getPermissinsFromRedis = getPermissionsFromRedis;
-
-export const setPermissionsToRedis = async (
-  userId: string,
-  permissions: string[],
-  ttlSeconds = PERMISSIONS_TTL_SECONDS,
-) => {
-  try {
-    await redis.set(
-      permissionsKey(userId),
-      JSON.stringify(normalizePermissions(permissions)),
-      "EX",
-      ttlSeconds,
-    );
-  } catch (error) {
-    console.error("Error setting user permissions to Redis:", error);
-    throw new Error("Failed to set user permissions to Redis");
-  }
-};
 
 export const getPermissionsFromDB = async (userId: string) => {
   try {

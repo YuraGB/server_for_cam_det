@@ -66,16 +66,24 @@ function handleRegister(
     return;
   }
 
+  if (ws.data.peerId === peerId && clients.get(peerId) === ws) {
+    sendJson(ws, { type: "registered", peerId });
+    return;
+  }
+
   removeClientMapping(ws);
 
   const existingClient = clients.get(peerId);
   if (existingClient && existingClient !== ws) {
-    sendJson(existingClient, {
-      type: "error",
-      code: "PEER_REPLACED",
-      message: "Peer re-registered from another connection.",
-    });
-    existingClient.close(4001, "peer replaced");
+    if (existingClient.readyState === 1) {
+      sendJson(existingClient, {
+        type: "error",
+        code: "PEER_REPLACED",
+        message: "Peer re-registered from another connection.",
+      });
+      existingClient.close(4001, "peer replaced");
+    }
+    removeClientMapping(existingClient);
   }
 
   ws.data.peerId = peerId;
@@ -136,9 +144,11 @@ function handleForward(
     return;
   }
 
+  const sourcePeerId = ws.data.peerId;
   const forwarded = sendJson(target, {
     ...data,
-    peerId: ws.data.peerId,
+    peerId: sourcePeerId,
+    sourcePeerId,
   });
 
   if (!forwarded) {

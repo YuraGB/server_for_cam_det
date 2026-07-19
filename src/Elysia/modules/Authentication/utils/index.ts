@@ -6,7 +6,7 @@ import {
   SERVICE_JWT_ISSUERS,
 } from "@/constants";
 import type { AuthClaims, AuthContext, AuthResult } from "@/types";
-import { upsertShadowUser } from "../../Routes/User/Service";
+import { upsertShadowUser } from "../../Routes/User/Services";
 import { jwtVerify } from "jose";
 import { getJWKS, isAllowedOrigin } from "@/Elysia/utils";
 

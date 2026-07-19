@@ -1,4 +1,4 @@
-import { getUserPermissions } from "../modules/Routes/User/Service";
+import { getUserPermissions } from "../modules/Routes/User/Services";
 
 export const hasPermissionsHandler = async (
   userId: string,

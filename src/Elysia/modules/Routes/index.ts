@@ -25,7 +25,6 @@ export const routes = new Elysia({ name: "Routes", cookie: {} })
   )
   .use(ip()) // Middleware to extract client IP and attach it to the request context
   .use(userRoutes)
-  // Todo: authentication middleware. Do not show the route if the user is not authenticated
   .get(HEALTH_ENDPOINT, () => ({
     status: "ok",
     peers: clients.size,
