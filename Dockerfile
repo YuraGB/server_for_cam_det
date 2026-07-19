@@ -24,22 +24,15 @@ RUN bun build \
 ##############################
 # Runtime
 ##############################
-FROM debian:bookworm-slim
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+FROM gcr.io/distroless/base-debian12
 
 WORKDIR /app
 
-COPY --from=builder /app/server .
-COPY --from=builder /app/drizzle ./drizzle
-
-RUN chmod +x server
+COPY --from=builder /app/server /app/server
+COPY --from=builder /app/drizzle /app/drizzle
 
 EXPOSE 3000
 
-USER nobody
+USER nonroot:nonroot
 
-ENTRYPOINT ["./server"]
+ENTRYPOINT ["/app/server"]
