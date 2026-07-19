@@ -18,7 +18,7 @@ RUN bun build \
     --minify \
     --target=bun-linux-x64-modern \
     --outfile server \
-    ./src/index.ts
+    ./src/server.ts
 
 
 ##############################
@@ -34,6 +34,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 COPY --from=builder /app/server .
+COPY --from=builder /app/drizzle ./drizzle
 
 RUN chmod +x server
 

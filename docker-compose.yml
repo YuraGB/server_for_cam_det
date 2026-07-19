@@ -14,5 +14,8 @@ services:
     environment:
       NODE_ENV: production
 
-    valumes:
-      - ./data:/app/data
+    volumes:
+      - ./db.sqlite:/app/db.sqlite
+
+    env_file:
+      - .env
