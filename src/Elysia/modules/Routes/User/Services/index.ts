@@ -7,7 +7,6 @@ import {
   normalizePermissions,
   parsePermissions,
 } from "@/Elysia/utils/formatPermissions";
-import redis from "@/Redis";
 import { eq } from "drizzle-orm";
 
 export async function upsertShadowUser(input: {

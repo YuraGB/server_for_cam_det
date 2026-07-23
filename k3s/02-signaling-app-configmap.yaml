@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: signaling-app-config
+  namespace: cam-det
+
+data:
+  PORT: "3002"
+  LOG_LEVEL: info
+  MAX_SIGNALING_MESSAGE_BYTES: "262144"
+  JWT_ISSUER: better-auth
+  JWT_AUDIENCE: signaling
+  SERVICE_JWT_ISSUERS: camera-cv-service
+  REDIS_HOST: signaling-redis
+  REDIS_PORT: "6379"
+  DB_PATH: /data/db.sqlite

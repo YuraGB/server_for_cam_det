@@ -22,3 +22,8 @@ README.md
 *.log
 
 *.tsbuildinfo
+k3s/
+start.kubernetes.sh
+stop.kubernetes.sh
+AGENT.md
+assets/

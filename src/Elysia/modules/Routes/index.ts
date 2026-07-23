@@ -2,15 +2,11 @@ import { Elysia } from "elysia";
 import { rateLimiter } from "../Security/RateLimiter";
 import serverTiming from "@elysia/server-timing";
 import cors from "@elysia/cors";
-import { securityHeaders } from "../Security/SeccurytyHeaders";
-import {
-  ALLOWED_HTTP_METHODS,
-  ALLOWED_ORIGINS,
-  HEALTH_ENDPOINT,
-} from "@/constants";
-import { clients } from "@/Elysia/utils";
+import { securityHeaders } from "../Security/SecurityHeaders";
+import { ALLOWED_HTTP_METHODS, ALLOWED_ORIGINS } from "@/constants";
 import { ip } from "elysia-ip";
 import { userRoutes } from "./User";
+import signalRoutes from "./Signals";
 
 export const routes = new Elysia({ name: "Routes", cookie: {} })
   .use(rateLimiter)
@@ -25,8 +21,4 @@ export const routes = new Elysia({ name: "Routes", cookie: {} })
   )
   .use(ip()) // Middleware to extract client IP and attach it to the request context
   .use(userRoutes)
-  .get(HEALTH_ENDPOINT, () => ({
-    status: "ok",
-    peers: clients.size,
-    uptimeSeconds: Math.floor(process.uptime()),
-  }));
+  .use(signalRoutes); // /health, /ping, /ready routes for health checks and readiness probes

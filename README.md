@@ -86,6 +86,7 @@ ws://host:3002/ws?token=<jwt>
 ```
 
 ⚠️ **Security Warning**: Query parameter is a fallback only.
+
 - In production, use **`wss://`** (encrypted) exclusively
 - Use short-lived tokens (low TTL)
 - Ensure reverse proxies, CDNs, and monitoring services do not log/cache `token` or `access_token`
@@ -111,4 +112,29 @@ Environment variables:
 - `JWT_AUDIENCE` shared audience, default `signaling`
 - `SERVICE_JWT_ISSUERS` comma-separated HS256 service issuers, default `camera-cv-service`
 
-See [.env.example](/D:/Projects/cam_serv/.env.example).
+## K8S (kubernetes)
+
+```Bash
+  # build local docker image
+  docker build -t signaling-app:v1 .
+
+  # Save
+  docker save signaling-app:v1 -o signaling-app-v1.tar
+
+  # export to k3s
+  sudo k3s ctr images import signaling-app-v1.tar
+
+  # start/apply kubernetes
+  ./start.kubernetes.sh
+
+  # delete stop kubernetes
+  ./stop.kubernetes.sh
+```
+
+```bash
+  #remove docker image
+  sudo k3s crictl rmi frontend-app:v1
+  # list images
+  sudo k3s crictl images
+  sudo k3s ctr images ls
+```

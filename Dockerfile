@@ -31,8 +31,8 @@ WORKDIR /app
 COPY --from=builder /app/server /app/server
 COPY --from=builder /app/drizzle /app/drizzle
 
-EXPOSE 3000
+EXPOSE 3002
 
-USER nonroot:nonroot
+USER 65532:65532
 
 ENTRYPOINT ["/app/server"]

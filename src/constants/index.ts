@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 
 const isDev = process.env.NODE_ENV || "development";
 const COOKiE_SECRET = process.env.COOKiE_SECRET || "secret";
+const APP_HOST = process.env.APP_HOST || "localhost";
 const DEFAULT_SERVER_PORT = 3002;
 const DEFAULT_MAX_SIGNALING_MESSAGE_BYTES = 256 * 1024;
 const DEFAULT_LOG_LEVEL = "info";
@@ -12,6 +13,7 @@ const DEFAULT_AUTH_JWT_AUDIENCE = "signaling";
 const DEFAULT_SERVICE_JWT_ISSUERS = ["camera-cv-service"];
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_TIMEOUT_MS = 40_000;
+const DB_PATH = process.env.DB_PATH || "/data/db.sqlite";
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
@@ -24,7 +26,6 @@ const srcDir = path.dirname(path.dirname(currentFilePath));
 const APP_ROOT = path.resolve(srcDir, "..");
 const SERVER_PORT = parsePositiveInt(process.env.PORT, DEFAULT_SERVER_PORT);
 const WS_ENDPOINT = "/ws";
-const HEALTH_ENDPOINT = "/health";
 const APP_NAME = "WebRTCSignalingServer";
 const LOG_LEVEL = process.env.LOG_LEVEL?.trim() || DEFAULT_LOG_LEVEL;
 const AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET?.trim() || "";
@@ -85,7 +86,6 @@ const jwksCache = new Map<
 export {
   SERVER_PORT,
   WS_ENDPOINT,
-  HEALTH_ENDPOINT,
   APP_NAME,
   AUTH_JWT_SECRET,
   AUTH_JWT_ISSUER,
@@ -101,4 +101,5 @@ export {
   jwksCache,
   isDev,
   COOKiE_SECRET,
+  DB_PATH,
 };

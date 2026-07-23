@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+
+kind: Deployment
+
+metadata:
+  name: signaling-redis
+
+  namespace: cam-det
+
+  labels:
+    app: signaling-redis
+
+    app.kubernetes.io/name: signaling-redis
+    app.kubernetes.io/part-of: cam-system
+    app.kubernetes.io/managed-by: kubectl
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: signaling-redis
+
+  template:
+    metadata:
+      labels:
+        app: signaling-redis
+
+        app.kubernetes.io/name: signaling-redis
+        app.kubernetes.io/part-of: cam-system
+        app.kubernetes.io/managed-by: kubectl
+
+    spec:
+      volumes:
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-pvc
+
+      containers:
+        - name: signaling-redis
+
+          image: redis:8.2.1
+
+          ports:
+            - name: redis
+              containerPort: 6379
+
+          imagePullPolicy: IfNotPresent
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+
+          envFrom:
+            - configMapRef:
+                name: signaling-redis-config
+
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+
+          startupProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 15
+
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
+
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3

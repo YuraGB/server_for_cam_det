@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: signaling-app
+  namespace: cam-det
+
+  labels:
+    app: signaling-app
+    app.kubernetes.io/name: signaling-app
+    app.kubernetes.io/part-of: cam-system
+    app.kubernetes.io/managed-by: kubectl
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: signaling-app
+
+  template:
+    metadata:
+      labels:
+        app: signaling-app
+        app.kubernetes.io/name: signaling-app
+        app.kubernetes.io/part-of: cam-system
+        app.kubernetes.io/managed-by: kubectl
+
+    spec:
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+
+      volumes:
+        - name: sqlite-pvc
+          persistentVolumeClaim:
+            claimName: sqlite-pvc
+
+      containers:
+        - name: signaling-app
+
+          image: docker.io/library/signaling-app:v1
+          imagePullPolicy: Never
+
+          volumeMounts:
+            - name: sqlite-pvc
+              mountPath: /data
+
+          ports:
+            - name: http
+              containerPort: 3002
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          envFrom:
+            - configMapRef:
+                name: signaling-app-config
+
+            - secretRef:
+                name: signaling-app-secret
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3002
+
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 15
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3002
+
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
